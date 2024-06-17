@@ -13,6 +13,25 @@ html {
   overflow: hidden; /* Prevent scrolling */
 }
 
+/* Hide inactive light button and show dark button in dark mode */
+.inactive-light {
+  display: none;
+}
+
+.theme-light {
+  display: inline-block;
+}
+
+.inactive-dark {
+  display: inline-block;
+}
+
+.theme-dark {
+  display: none;
+}
+
+/* Other existing styles remain unchanged */
+
 .main-container {
   display: flex;
   flex-direction: column;
@@ -72,7 +91,7 @@ html {
 
 .dynamic-viewport {
   flex-grow: 1;
-  padding: 10px;
+  padding: 20px;
   background-color: #121212; /* Dark background */
   color: #e0e0e0; /* Light text color */
   overflow-y: auto; /* Make the content area scrollable if content overflows */
@@ -82,7 +101,7 @@ html {
   background-color: #1e1e1e; /* Dark slate background */
   border: 1px solid #333; /* Dark border */
   margin-bottom: 10px;
-  padding: 10px;
+  padding: 20px;
   border-radius: 5px;
 }
 
