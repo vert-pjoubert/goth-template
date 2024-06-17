@@ -1,0 +1,11 @@
+package templates
+
+templ Sidebar() {
+	<nav class="sidebar-nav">
+		<ul>
+			<li><a href="#" hx-get="/view?view=servers" hx-trigger="click" hx-target="#dynamic-viewport" hx-swap="innerHTML">Servers</a></li>
+			<li><a href="#" hx-get="/view?view=events" hx-trigger="click" hx-target="#dynamic-viewport" hx-swap="innerHTML">Events</a></li>
+			<li><a href="#" hx-get="/view?view=settings" hx-trigger="click" hx-target="#dynamic-viewport" hx-swap="innerHTML">Settings</a></li>
+		</ul>
+	</nav>
+}

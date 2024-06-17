@@ -1,0 +1,11 @@
+package main
+
+templ VideoServer(server Server) {
+	<div class="server-container">
+		<h2>{server.Name}</h2>
+		<video controls>
+			<source src="{server.URL}" type="video/mp4">
+			Your browser does not support the video tag.
+		</video>
+	</div>
+}

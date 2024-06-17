@@ -1,0 +1,21 @@
+package templates
+
+templ Layout(content templ.Component, theme string) {
+	<div class="main-container">
+		<link rel="stylesheet" href="/static/styles-{ theme }.css">
+		<div id="header" hx-get="/layout?part=header" hx-trigger="load" hx-swap="innerHTML">
+			Loading header...
+		</div>
+		<div class="container">
+			<div class="sidebar" hx-get="/layout?part=sidebar" hx-trigger="load" hx-swap="innerHTML">
+				Loading sidebar...
+			</div>
+			<div id="dynamic-viewport" class="dynamic-viewport">
+				@content
+			</div>
+		</div>
+		<div id="footer" hx-get="/layout?part=footer" hx-trigger="load" hx-swap="innerHTML">
+			Loading footer...
+		</div>
+	</div>
+}

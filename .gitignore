@@ -1,0 +1,43 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Project-specific files
+.env
+
+# Templ generated files
+*.templ.go
+
+# Dependency directories (remove the comment below if you use Go modules)
+vendor/
+
+# Node modules for projects that may include frontend code
+node_modules/
+
+# VS Code directories
+.vscode/
+.history/
+
+# MacOS
+.DS_Store
+
+# Windows
+Thumbs.db
+ehthumbs.db
+
+# IDE directories
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Goland IDE
+.idea/
+*.iml

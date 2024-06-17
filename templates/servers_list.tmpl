@@ -1,0 +1,22 @@
+package templates
+
+templ ServerCard(serverID, name, serverType string) {
+	<div class="feed-item" hx-get="/view?view=server&id={serverID}" hx-target="#dynamic-viewport" hx-swap="innerHTML">
+		<div class="thumbnail">
+			<img src="/static/server-thumbnail.jpg" alt="Server Thumbnail">
+		</div>
+		<div class="event-details">
+			<div class="event-source">
+				{name}
+			</div>
+		</div>
+	</div>
+}
+
+templ ServersList(servers []Server) {
+	<div class="servers-container">
+		{ for _, server := range servers }
+			@ServerCard(server.ServerID, server.Name, server.Type)
+		{ end }
+	</div>
+}
