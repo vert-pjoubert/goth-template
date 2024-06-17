@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"net/http"
 	"time"
 
@@ -34,9 +33,9 @@ func getLoginHandler(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
-	// Render the login form
-	login := templates.Login()
-	login.Render(context.Background(), w)
+	// Render the login form inside the layout
+	content := templates.Login()
+	renderWithLayout(w, content, r)
 }
 
 func isAuthenticated(r *http.Request) bool {
