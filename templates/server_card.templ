@@ -12,11 +12,3 @@ templ ServerCard(serverID, name, serverType string) {
 		</div>
 	</div>
 }
-
-templ ServersList(servers []Server) {
-	<div class="servers-container">
-		{ for _, server := range servers }
-			@ServerCard(server.ServerID, server.Name, server.Type)
-		{ end }
-	</div>
-}

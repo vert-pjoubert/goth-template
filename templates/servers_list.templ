@@ -1,0 +1,11 @@
+package templates
+
+templ ServersList(servers []Server) {
+	<div class="servers-container">
+		<ul>
+		for _, server := range servers {
+			@ServerCard(server.ServerID, server.Name, server.Type)
+		}
+		</ul>
+	</div>
+}

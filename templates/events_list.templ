@@ -1,0 +1,11 @@
+package templates
+
+templ EventsList(events []Event) {
+	<div class="events-container">
+		<ul>
+		for _, event := range events {
+			@EventCard(event.ThumbnailURL, event.Source, event.Time, event.Severity, event.SeverityClass, event.Description, event.EventID, event.EventType)
+		}
+		</ul>
+	</div>
+}

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="/static/styles-light.css">
+    <script src="https://unpkg.com/htmx.org@1.5.0"></script>
+</head>
+<body>
+    <div id="layout">
+        <div id="header" hx-get="/layout?part=header" hx-trigger="load" hx-swap="innerHTML">
+            Loading header...
+        </div>
+        <div class="container">
+            <div class="sidebar" hx-get="/layout?part=sidebar" hx-trigger="load" hx-swap="innerHTML">
+                Loading sidebar...
+            </div>
+            <div id="content">
+                <div id="events-container" hx-get="/view?view=events" hx-trigger="load" hx-target="#events-container" hx-swap="innerHTML"></div>
+            </div>
+        </div>
+        <div id="footer" hx-get="/layout?part=footer" hx-trigger="load" hx-swap="innerHTML">
+            Loading footer...
+        </div>
+    </div>
+</body>
+</html>

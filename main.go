@@ -6,56 +6,8 @@ import (
 	"net/http"
 
 	"github.com/a-h/templ"
+	"github.com/vert-pjoubert/goth-template/templates"
 )
-
-type Event struct {
-	EventID       string
-	ThumbnailURL  string
-	Source        string
-	Time          string
-	Severity      string
-	SeverityClass string
-	Description   string
-	URL           string
-	EventType     string
-}
-
-type Server struct {
-	ServerID string
-	URL      string
-	Name     string
-	Type     string
-}
-
-var events = []Event{
-	{
-		EventID:       "1",
-		ThumbnailURL:  "event-thumbnail.jpg",
-		Source:        "System A",
-		Time:          "10:30 AM",
-		Severity:      "High",
-		SeverityClass: getSeverityClass("High"),
-		Description:   "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed ac justo vel urna.",
-		URL:           "/static/video.mp4",
-		EventType:     "video",
-	},
-	// Add more events as needed
-}
-
-var servers = []Server{
-	{
-		ServerID: "1",
-		URL:      "/static/server1.png",
-		Name:     "Server A",
-		Type:     "video",
-	},
-	{
-		ServerID: "2",
-		URL:      "/static/server2.png",
-		Name:     "Server B",
-		Type:     "map",
-	},
-}
 
 func getSeverityClass(severity string) string {
 	switch severity {
@@ -76,74 +28,39 @@ func getTheme(r *http.Request) string {
 
 func renderWithLayout(w http.ResponseWriter, content templ.Component, r *http.Request) {
 	theme := getTheme(r)
-	layout := Layout(content, theme)
+	layout := templates.Layout(content, theme)
 	layout.Render(context.Background(), w)
 }
 
-func viewHandler(w http.ResponseWriter, r *http.Request) {
-	view := r.URL.Query().Get("view")
-	switch view {
-	case "settings":
-		content := Settings()
-		renderWithLayout(w, content, r)
-	case "servers":
-		content := ServersList(servers)
-		renderWithLayout(w, content, r)
-	case "events":
-		content := EventsList(events)
-		renderWithLayout(w, content, r)
-	case "server":
-		serverID := r.URL.Query().Get("id")
-		var server Server
-		for _, s := range servers {
-			if s.ServerID == serverID {
-				server = s
-				break
-			}
+func IndexHandler(w http.ResponseWriter, r *http.Request) {
+	if !isAuthenticated(r) {
+		http.Redirect(w, r, "/login", http.StatusFound)
+		return
+	}
+	content := templates.Home()
+	renderWithLayout(w, content, r)
+}
+
+func viewHandler(renderer ViewRenderer) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !isAuthenticated(r) {
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return
 		}
-		switch server.Type {
-		case "video":
-			content := VideoServer(server)
-			renderWithLayout(w, content, r)
-		case "map":
-			content := MapServer(server)
-			renderWithLayout(w, content, r)
-		default:
-			fmt.Fprintf(w, "<div>Unsupported server type</div>")
-		}
-	case "event":
-		eventID := r.URL.Query().Get("id")
-		var event Event
-		for _, e := range events {
-			if e.EventID == eventID {
-				event = e
-				break
-			}
-		}
-		switch event.EventType {
-		case "video":
-			content := VideoEvent(event)
-			renderWithLayout(w, content, r)
-		default:
-			fmt.Fprintf(w, "<div>Unsupported event type</div>")
-		}
-	default:
-		http.Error(w, "Invalid view", http.StatusBadRequest)
+		renderer.RenderView(w, r)
 	}
 }
 
 func layoutHandler(w http.ResponseWriter, r *http.Request) {
 	part := r.URL.Query().Get("part")
+	ctx := context.Background()
 	switch part {
 	case "header":
-		header := Header()
-		header.Render(context.Background(), w)
+		templates.Header().Render(ctx, w)
 	case "footer":
-		footer := Footer()
-		footer.Render(context.Background(), w)
+		templates.Footer().Render(ctx, w)
 	case "sidebar":
-		sidebar := Sidebar()
-		sidebar.Render(context.Background(), w)
+		templates.Sidebar().Render(ctx, w)
 	default:
 		http.Error(w, "Invalid part", http.StatusBadRequest)
 	}
@@ -165,12 +82,57 @@ func changeThemeHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, `<link rel="stylesheet" href="/static/styles-%s.css">`, theme)
 }
 
+func logoutHandler(w http.ResponseWriter, r *http.Request) {
+	// Clear the session cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:   "session_token",
+		Value:  "",
+		Path:   "/",
+		MaxAge: -1,
+	})
+	// Redirect to the login page
+	http.Redirect(w, r, "/login", http.StatusFound)
+}
+
 func main() {
+	viewRenderer := &DefaultViewRenderer{}
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
-	http.HandleFunc("/view", viewHandler)
+	http.HandleFunc("/", IndexHandler)
+	http.HandleFunc("/view", viewHandler(viewRenderer))
 	http.HandleFunc("/layout", layoutHandler)
 	http.HandleFunc("/change-theme", changeThemeHandler)
 	http.HandleFunc("/login", getLoginHandler)
+	http.HandleFunc("/logout", logoutHandler)
 
 	http.ListenAndServe(":8080", nil)
+}
+
+var events = []templates.Event{
+	{
+		EventID:       "1",
+		ThumbnailURL:  "event-thumbnail.jpg",
+		Source:        "System A",
+		Time:          "10:30 AM",
+		Severity:      "High",
+		SeverityClass: getSeverityClass("High"),
+		Description:   "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed ac justo vel urna.",
+		URL:           "/static/video.mp4",
+		EventType:     "video",
+	},
+	// Add more events as needed
+}
+
+var servers = []templates.Server{
+	{
+		ServerID: "1",
+		URL:      "/static/server1.png",
+		Name:     "Server A",
+		Type:     "video",
+	},
+	{
+		ServerID: "2",
+		URL:      "/static/server2.png",
+		Name:     "Server B",
+		Type:     "map",
+	},
 }

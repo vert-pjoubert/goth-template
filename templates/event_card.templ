@@ -1,0 +1,23 @@
+package templates
+
+templ EventCard(thumbnailURL, source, time, severity, severityClass, description, eventID, eventType string) {
+	<div class="feed-item" hx-get="/view?view=event&id={eventID}" hx-target="#dynamic-viewport" hx-swap="innerHTML">
+		<div class="thumbnail">
+			<img src="{thumbnailURL}" alt="Event Thumbnail">
+		</div>
+		<div class="event-details">
+			<div class="event-source">
+				Source: {source}
+			</div>
+			<div class="event-time">
+				{time}
+			</div>
+			<div class="event-severity">
+				<span class="severity {severityClass}">{severity}</span>
+			</div>
+			<div class="event-description">
+				{description}
+			</div>
+		</div>
+	</div>
+}
