@@ -23,7 +23,20 @@ func Layout(content templ.Component, theme string) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>Dashboard</title><link rel=\"stylesheet\" href=\"/static/styles-{ theme }.css\"><script src=\"https://unpkg.com/htmx.org@1.5.0\"></script></head><body><div id=\"layout\"><div id=\"header\" hx-get=\"/layout?part=header\" hx-trigger=\"load\" hx-swap=\"innerHTML\">Loading header...</div><div class=\"container\"><div class=\"sidebar\" hx-get=\"/layout?part=sidebar\" hx-trigger=\"load\" hx-swap=\"innerHTML\">Loading sidebar...</div><div id=\"content\">")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>Dashboard</title><link rel=\"stylesheet\" href=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var2 string
+		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs("/static/styles-" + theme + ".css")
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `layout.templ`, Line: 9, Col: 71}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("\"><script src=\"https://unpkg.com/htmx.org@1.5.0\"></script></head><body><div id=\"layout\"><div id=\"header\" hx-get=\"/layout?part=header\" hx-trigger=\"load\" hx-swap=\"innerHTML\">Loading header...</div><div class=\"container\"><div class=\"sidebar\" hx-get=\"/layout?part=sidebar\" hx-trigger=\"load\" hx-swap=\"innerHTML\">Loading sidebar...</div><div id=\"content\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

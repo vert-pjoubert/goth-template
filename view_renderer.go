@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+
 	"github.com/vert-pjoubert/goth-template/templates"
 )
 
@@ -17,13 +19,13 @@ func (vr *DefaultViewRenderer) RenderView(w http.ResponseWriter, r *http.Request
 	switch view {
 	case "settings":
 		content := templates.Settings()
-		renderWithLayout(w, content, r)
+		content.Render(context.Background(), w)
 	case "servers":
 		content := templates.ServersList(servers)
-		renderWithLayout(w, content, r)
+		content.Render(context.Background(), w)
 	case "events":
 		content := templates.EventsList(events)
-		renderWithLayout(w, content, r)
+		content.Render(context.Background(), w)
 	case "server":
 		serverID := r.URL.Query().Get("id")
 		var server templates.Server
@@ -36,10 +38,10 @@ func (vr *DefaultViewRenderer) RenderView(w http.ResponseWriter, r *http.Request
 		switch server.Type {
 		case "video":
 			content := templates.VideoServer(server)
-			renderWithLayout(w, content, r)
+			content.Render(context.Background(), w)
 		case "map":
 			content := templates.MapServer(server)
-			renderWithLayout(w, content, r)
+			content.Render(context.Background(), w)
 		default:
 			fmt.Fprintf(w, "<div>Unsupported server type</div>")
 		}
@@ -55,7 +57,7 @@ func (vr *DefaultViewRenderer) RenderView(w http.ResponseWriter, r *http.Request
 		switch event.EventType {
 		case "video":
 			content := templates.VideoEvent(event)
-			renderWithLayout(w, content, r)
+			content.Render(context.Background(), w)
 		default:
 			fmt.Fprintf(w, "<div>Unsupported event type</div>")
 		}
