@@ -1,9 +1,16 @@
 body {
   font-family: Arial, sans-serif;
-  background-color: #f4f4f4;
-  color: #333;
+  background-color: #ffffff; /* Marble white background */
+  color: #333333; /* Dark text color */
   margin: 0;
   padding: 0;
+  height: 100%; /* Ensure body takes full height */
+  overflow: hidden; /* Prevent scrolling */
+}
+
+html {
+  height: 100%; /* Ensure html takes full height */
+  overflow: hidden; /* Prevent scrolling */
 }
 
 .main-container {
@@ -12,37 +19,41 @@ body {
   min-height: 100vh;
 }
 
-.header{
-  background-color: #333;
-  color: white;
+.header {
+  background-color: #333333; /* Dark header background */
+  color: #ffffff; /* Light text color */
   padding: 10px;
   text-align: center;
 }
 
 .footer {
-  position: absolute;
-  bottom: 0;
   width: 100%;
   text-align: center;
   padding: 10px;
-  background-color: #f1f1f1;
+  background-color: #f1f1f1; /* Light gray footer background */
+  color: #333333; /* Dark text color */
 }
 
 .container {
   display: flex;
   flex-grow: 1;
+  overflow: hidden; /* Ensure content does not overflow */
 }
 
 .sidebar {
   width: 200px;
-  background-color: #f4f4f4;
+  background-color: #f8f8f8; /* Very light gray background */
   padding: 10px;
-  border-right: 1px solid #ddd;
+  border-right: 1px solid #dddddd; /* Light gray border */
+  overflow-y: auto; /* Make sidebar scrollable if content overflows */
+  overflow-x: hidden; /* Prevent horizontal overflow */
+  box-sizing: border-box; /* Include padding and border in the element's total width */
 }
 
 .sidebar ul {
   list-style-type: none;
   padding: 0;
+  margin: 0; /* Remove default margin */
 }
 
 .sidebar ul li {
@@ -51,7 +62,8 @@ body {
 
 .sidebar ul li a {
   text-decoration: none;
-  color: #333;
+  color: #333333; /* Dark text color */
+  display: block; /* Ensure the link takes the full width of the parent li */
 }
 
 .sidebar ul li a:hover {
@@ -60,19 +72,23 @@ body {
 
 .dynamic-viewport {
   flex-grow: 1;
-  padding: 10px;
+  padding: 20px;
+  background-color: #ffffff; /* Marble white background */
+  color: #333333; /* Dark text color */
+  overflow-y: auto; /* Make the content area scrollable if content overflows */
 }
 
 .event-container {
-  background-color: white;
-  border: 1px solid #ddd;
+  background-color: #ffffff; /* Marble white background */
+  border: 1px solid #dddddd; /* Light gray border */
   margin-bottom: 10px;
-  padding: 10px;
+  padding: 20px;
   border-radius: 5px;
 }
 
 .event-container h2 {
   margin-top: 0;
+  color: #333333; /* Dark text color */
 }
 
 .event-container video {
@@ -83,13 +99,15 @@ body {
   max-width: 300px;
   margin: 50px auto;
   padding: 20px;
-  border: 1px solid #ccc;
-  background-color: #fff;
+  border: 1px solid #dddddd; /* Light gray border */
+  background-color: #ffffff; /* Marble white background */
+  color: #333333; /* Dark text color */
   border-radius: 5px;
 }
 
 .login-container h2 {
   text-align: center;
+  color: #333333; /* Dark text color */
 }
 
 .login-container div {
@@ -99,6 +117,7 @@ body {
 .login-container label {
   display: block;
   margin-bottom: 5px;
+  color: #333333; /* Dark text color */
 }
 
 .login-container input[type="text"],
@@ -106,6 +125,9 @@ body {
   width: 100%;
   padding: 8px;
   box-sizing: border-box;
+  background-color: #f8f8f8; /* Very light gray input background */
+  color: #333333; /* Dark text color */
+  border: 1px solid #dddddd; /* Light gray border */
 }
 
 .login-container button {
@@ -127,3 +149,23 @@ body {
   min-height: 100vh;
 }
 
+#layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh; /* Full height of the viewport */
+}
+
+.container {
+  display: flex;
+  flex: 1;
+  overflow: hidden; /* Prevent overflowing content */
+}
+
+#content {
+  flex-grow: 1;
+  padding: 20px; /* Adjust padding as needed */
+  overflow-y: auto; /* Make content area scrollable */
+  overflow-x: hidden; /* Prevent horizontal overflow */
+  background-color: #ffffff; /* Marble white background */
+  color: #333333; /* Dark text color */
+}

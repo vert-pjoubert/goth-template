@@ -23,7 +23,7 @@ func Settings() templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<div class=\"settings-container\"><h2>Settings</h2><form id=\"theme-form\"><div><label for=\"theme\">Select Theme:</label> <select id=\"theme\" name=\"theme\"><option value=\"light\">Light</option> <option value=\"dark\">Dark</option></select></div><button type=\"button\" hx-get=\"/change-theme\" hx-target=\"body\" hx-swap=\"outerHTML\" hx-include=\"#theme-form\">Change Theme</button></form></div>")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<div class=\"settings-container\"><h2>Settings</h2><form method=\"POST\" action=\"/change-theme\" id=\"theme-form\"><div><label for=\"theme\">Select Theme:</label> <select id=\"theme\" name=\"theme\"><option value=\"light\">Light</option> <option value=\"dark\">Dark</option></select></div><button type=\"submit\">Change Theme</button></form></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

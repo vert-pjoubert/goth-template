@@ -8,6 +8,13 @@ templ Layout(content templ.Component, theme string) {
         <title>Dashboard</title>
         <link rel="stylesheet" href={"/static/styles-" + theme + ".css"}>
         <script src="https://unpkg.com/htmx.org@1.5.0"></script>
+        <script>
+            document.body.addEventListener('htmx:responseError', function(event) {
+                if (event.detail.xhr.status === 401) {
+                    window.location.href = '/login';
+                }
+            });
+        </script>
     </head>
     <body>
         <div id="layout">

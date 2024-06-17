@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 
 	"github.com/a-h/templ"
@@ -44,7 +43,7 @@ func IndexHandler(w http.ResponseWriter, r *http.Request) {
 func viewHandler(renderer ViewRenderer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !isAuthenticated(r) {
-			http.Redirect(w, r, "/login", http.StatusFound)
+			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 		renderer.RenderView(w, r)
@@ -67,19 +66,22 @@ func layoutHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func changeThemeHandler(w http.ResponseWriter, r *http.Request) {
-	theme := r.URL.Query().Get("theme")
-	if theme != "" {
-		http.SetCookie(w, &http.Cookie{
-			Name:  "theme",
-			Value: theme,
-			Path:  "/",
-			// Set a long expiry time for persistent preference
-			MaxAge: 365 * 24 * 60 * 60, // 1 year
-		})
+	if r.Method == "POST" {
+		theme := r.FormValue("theme")
+		if theme != "" {
+			http.SetCookie(w, &http.Cookie{
+				Name:  "theme",
+				Value: theme,
+				Path:  "/",
+				// Set a long expiry time for persistent preference
+				MaxAge: 365 * 24 * 60 * 60, // 1 year
+			})
+		}
+		// Redirect back to the referring page to refresh the content
+		http.Redirect(w, r, r.Referer(), http.StatusSeeOther)
+		return
 	}
-	// Load the CSS for the new theme
-	w.Header().Set("Content-Type", "text/html")
-	fmt.Fprintf(w, `<link rel="stylesheet" href="/static/styles-%s.css">`, theme)
+	http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 }
 
 func logoutHandler(w http.ResponseWriter, r *http.Request) {
