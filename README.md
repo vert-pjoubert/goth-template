@@ -1,10 +1,12 @@
+### Updated README.md
+
 ### Go Templ + HTMX Website Template Documentation
 
-This documentation provides an overview of the architecture and functionalities of the Go Templ + HTMX website template. It covers how we render pages, handle authentication, and manage theme switching. The goal is to give a clear understanding of how the components work together without diving into large code samples.
+This documentation provides an overview of the architecture and functionalities of the Go Templ + HTMX website template. It covers how we render pages, handle authentication, manage theme switching, and integrate with OAuth2 and XORM for database interactions. The goal is to give a clear understanding of how the components work together without diving into large code samples.
 
 #### 1. **Overview**
 
-The website template leverages Go Templ for server-side rendering of HTML templates and HTMX for enhancing the user experience with AJAX capabilities. This combination allows for dynamic and interactive web pages while maintaining a clean and efficient server-side rendering process.
+The website template leverages Go Templ for server-side rendering of HTML templates and HTMX for enhancing the user experience with AJAX capabilities. This combination allows for dynamic and interactive web pages while maintaining a clean and efficient server-side rendering process. Additionally, it supports OAuth2 authentication and integrates XORM for database interactions with MySQL.
 
 #### 2. **Page Rendering**
 
@@ -27,18 +29,40 @@ The website template leverages Go Templ for server-side rendering of HTML templa
 
 #### 3. **Authentication**
 
+**OAuth2 Integration**
+
+- The template supports OAuth2 authentication using Google or any other OAuth2-compliant provider.
+- The `OAuth2Authenticator` handles the OAuth2 login flow, including redirecting to the provider, handling callbacks, and managing sessions.
+
 **Login Handler**
 
-- The `getLoginHandler` handles rendering the login form and processing login submissions.
+- The `LoginHandler` initiates the OAuth2 login flow.
 - If the user is authenticated, a session cookie is set to manage the user's session.
 - Unauthorized users are redirected to the login page.
 
 **Authentication Check**
 
-- The `isAuthenticated` function checks if a valid session cookie is present.
+- The `IsAuthenticated` function checks if a valid session cookie is present.
 - If not authenticated, certain routes respond with a `401 Unauthorized` status, which HTMX intercepts to redirect users to the login page.
 
-#### 4. **Dynamic Content Loading**
+#### 4. **Database Integration with XORM**
+
+**DbStore Interface**
+
+- The `DbStore` interface provides basic CRUD operations for interacting with the database.
+- The `XormDbStore` implementation uses XORM to manage database interactions.
+
+**AppStore Interface**
+
+- The `AppStore` interface wraps `DbStore` to add caching and application-specific logic.
+- The `CachedAppStore` implementation uses an in-memory cache to enhance performance.
+
+**Managing Application State**
+
+- The `AppStore` interface includes methods for managing user sessions and retrieving user data with roles.
+- The `GetUserWithRoleByEmail` method retrieves user information along with their role from the database.
+
+#### 5. **Dynamic Content Loading**
 
 **HTMX Integration**
 
@@ -50,12 +74,12 @@ The website template leverages Go Templ for server-side rendering of HTML templa
 - The template includes an event listener for `htmx:responseError` to handle `401 Unauthorized` responses.
 - When an unauthorized response is detected, the user is redirected to the login page.
 
-#### 5. **Theme Switching**
+#### 6. **Theme Switching**
 
 **Settings Template**
 
 - The `Settings` template provides buttons to switch between light and dark themes.
-- When a theme button is clicked, a form submission updates the theme preference via the `changeThemeHandler`.
+- When a theme button is clicked, a form submission updates the theme preference via the `ChangeThemeHandler`.
 
 **CSS for Themes**
 
@@ -67,7 +91,7 @@ The website template leverages Go Templ for server-side rendering of HTML templa
 - The light theme shows the dark theme button and hides the light theme button.
 - The dark theme shows the light theme button and hides the dark theme button.
 
-#### 6. **Form Handling and AJAX**
+#### 7. **Form Handling and AJAX**
 
 **Form Submissions**
 
@@ -81,4 +105,4 @@ The website template leverages Go Templ for server-side rendering of HTML templa
 
 ### Summary
 
-This Go Templ + HTMX website template provides a robust structure for building interactive and dynamic web applications. By leveraging server-side rendering for initial page loads and HTMX for dynamic updates, the template ensures a smooth user experience while maintaining the simplicity and efficiency of server-rendered HTML. The template also includes mechanisms for handling authentication and theme switching, making it a comprehensive solution for modern web development.
+This Go Templ + HTMX website template provides a robust structure for building interactive and dynamic web applications. By leveraging server-side rendering for initial page loads and HTMX for dynamic updates, the template ensures a smooth user experience while maintaining the simplicity and efficiency of server-rendered HTML. The template also includes mechanisms for handling authentication and theme switching, making it a comprehensive solution for modern web development. With built-in support for OAuth2 authentication and XORM for MySQL database integration, it offers a solid foundation for secure and scalable applications. The `AppStore` interface manages application state efficiently, providing a seamless way to handle user sessions and data retrieval within the view renderer.
