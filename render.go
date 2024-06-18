@@ -6,7 +6,6 @@ import (
 
 	"github.com/a-h/templ"
 
-	"github.com/vert-pjoubert/goth-template/store"
 	"github.com/vert-pjoubert/goth-template/store/models"
 	"github.com/vert-pjoubert/goth-template/templates"
 )
@@ -28,10 +27,10 @@ func (r *TemplRenderer) RenderWithLayout(w http.ResponseWriter, content templ.Co
 // ###################################################
 // view renderer
 type ViewRenderer struct {
-	AppStore store.AppStore
+	AppStore AppStore
 }
 
-func NewViewRenderer(appStore store.AppStore) *ViewRenderer {
+func NewViewRenderer(appStore AppStore) *ViewRenderer {
 	return &ViewRenderer{AppStore: appStore}
 }
 

@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/a-h/templ"
@@ -41,7 +40,7 @@ func TestPageRenderPipeline(t *testing.T) {
 	authenticator := auth.NewOAuth2AuthenticatorWithConfig(oauth2Config, "mockstate", store)
 	appStore := &mockAppStore{}
 	viewRenderer := NewViewRenderer(appStore)
-	h := NewHandlers(authenticator, NewTemplRenderer())
+	h := NewHandlers(authenticator, NewTemplRenderer(), viewRenderer)
 
 	testCases := []struct {
 		name   string
@@ -131,20 +130,6 @@ func TestPageRenderPipeline(t *testing.T) {
 			t.Logf("Dumped %s to %s", tc.name, dumpPath)
 		})
 	}
-}
-
-type fakeResponseWriter struct {
-	Body strings.Builder
-}
-
-func (w *fakeResponseWriter) Header() http.Header {
-	return http.Header{}
-}
-
-func (w *fakeResponseWriter) WriteHeader(statusCode int) {}
-
-func (w *fakeResponseWriter) Write(b []byte) (int, error) {
-	return w.Body.Write(b)
 }
 
 type mockAppStore struct{}

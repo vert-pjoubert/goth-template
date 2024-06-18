@@ -52,7 +52,7 @@ func main() {
 	authenticator := auth.NewOAuth2Authenticator(sessionStore)
 	renderer := NewTemplRenderer()
 	viewRenderer := NewViewRenderer(appStore)
-	h := NewHandlers(authenticator, renderer)
+	h := NewHandlers(authenticator, renderer, viewRenderer)
 
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 	http.HandleFunc("/", h.IndexHandler)
