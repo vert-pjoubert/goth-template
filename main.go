@@ -1,140 +1,77 @@
 package main
 
 import (
-	"context"
+	"fmt"
+	"log"
 	"net/http"
+	"os"
 
-	"github.com/a-h/templ"
-	"github.com/vert-pjoubert/goth-template/templates"
+	_ "github.com/go-sql-driver/mysql"
+	"github.com/gorilla/sessions"
+	"github.com/joho/godotenv"
+	"github.com/vert-pjoubert/goth-template/auth"
+	"github.com/vert-pjoubert/goth-template/store"
+	"github.com/vert-pjoubert/goth-template/store/models"
+	"xorm.io/xorm"
 )
 
-func getSeverityClass(severity string) string {
-	switch severity {
-	case "High":
-		return "high"
-	default:
-		return ""
+func init() {
+	if err := godotenv.Load(); err != nil {
+		log.Fatal("Error loading .env file")
 	}
 }
 
-func getTheme(r *http.Request) string {
-	cookie, err := r.Cookie("theme")
+func initDB() *xorm.Engine {
+	dbUser := os.Getenv("DB_USER")
+	dbPassword := os.Getenv("DB_PASSWORD")
+	dbHost := os.Getenv("DB_HOST")
+	dbPort := os.Getenv("DB_PORT")
+	dbName := os.Getenv("DB_NAME")
+
+	dataSourceName := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8&parseTime=True&loc=Local",
+		dbUser, dbPassword, dbHost, dbPort, dbName)
+
+	engine, err := xorm.NewEngine("mysql", dataSourceName)
 	if err != nil {
-		return "light" // default theme
+		log.Fatalf("Failed to create XORM engine: %v", err)
 	}
-	return cookie.Value
-}
 
-func renderWithLayout(w http.ResponseWriter, content templ.Component, r *http.Request) {
-	theme := getTheme(r)
-	layout := templates.Layout(content, theme)
-	layout.Render(context.Background(), w)
-}
-
-func IndexHandler(w http.ResponseWriter, r *http.Request) {
-	if !isAuthenticated(r) {
-		http.Redirect(w, r, "/login", http.StatusFound)
-		return
+	err = engine.Sync2(new(models.User), new(models.Role))
+	if err != nil {
+		log.Fatalf("Failed to sync database schema: %v", err)
 	}
-	content := templates.Home()
-	renderWithLayout(w, content, r)
-}
 
-func viewHandler(renderer ViewRenderer) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if !isAuthenticated(r) {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-		renderer.RenderView(w, r)
-	}
-}
-
-func layoutHandler(w http.ResponseWriter, r *http.Request) {
-	part := r.URL.Query().Get("part")
-	ctx := context.Background()
-	switch part {
-	case "header":
-		templates.Header().Render(ctx, w)
-	case "footer":
-		templates.Footer().Render(ctx, w)
-	case "sidebar":
-		templates.Sidebar().Render(ctx, w)
-	default:
-		http.Error(w, "Invalid part", http.StatusBadRequest)
-	}
-}
-
-func changeThemeHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "POST" {
-		theme := r.FormValue("theme")
-		if theme != "" {
-			http.SetCookie(w, &http.Cookie{
-				Name:  "theme",
-				Value: theme,
-				Path:  "/",
-				// Set a long expiry time for persistent preference
-				MaxAge: 365 * 24 * 60 * 60, // 1 year
-			})
-		}
-		// Redirect back to the referring page to refresh the content
-		http.Redirect(w, r, r.Referer(), http.StatusSeeOther)
-		return
-	}
-	http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
-}
-
-func logoutHandler(w http.ResponseWriter, r *http.Request) {
-	// Clear the session cookie
-	http.SetCookie(w, &http.Cookie{
-		Name:   "session_token",
-		Value:  "",
-		Path:   "/",
-		MaxAge: -1,
-	})
-	// Redirect to the login page
-	http.Redirect(w, r, "/login", http.StatusFound)
+	return engine
 }
 
 func main() {
-	viewRenderer := &DefaultViewRenderer{}
+	engine := initDB()
+	sessionStore := sessions.NewCookieStore([]byte(os.Getenv("SESSION_KEY")))
+	dbStore := store.NewXormDbStore(engine)
+	appStore := store.NewCachedAppStore(dbStore, sessionStore)
+	authenticator := auth.NewOAuth2Authenticator(sessionStore)
+	renderer := NewTemplRenderer()
+	viewRenderer := NewViewRenderer(appStore)
+	h := NewHandlers(authenticator, renderer)
+
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
-	http.HandleFunc("/", IndexHandler)
-	http.HandleFunc("/view", viewHandler(viewRenderer))
-	http.HandleFunc("/layout", layoutHandler)
-	http.HandleFunc("/change-theme", changeThemeHandler)
-	http.HandleFunc("/login", getLoginHandler)
-	http.HandleFunc("/logout", logoutHandler)
+	http.HandleFunc("/", h.IndexHandler)
+	http.HandleFunc("/view", authMiddleware(authenticator, viewRenderer.RenderView))
+	http.HandleFunc("/layout", h.LayoutHandler)
+	http.HandleFunc("/change-theme", h.ChangeThemeHandler)
+	http.HandleFunc("/login", authenticator.LoginHandler)
+	http.HandleFunc("/logout", authenticator.LogoutHandler)
+	http.HandleFunc("/oauth2/callback", authenticator.CallbackHandler)
 
-	http.ListenAndServe(":8080", nil)
+	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
-var events = []templates.Event{
-	{
-		EventID:       "1",
-		ThumbnailURL:  "event-thumbnail.jpg",
-		Source:        "System A",
-		Time:          "10:30 AM",
-		Severity:      "High",
-		SeverityClass: getSeverityClass("High"),
-		Description:   "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed ac justo vel urna.",
-		URL:           "/static/video.mp4",
-		EventType:     "video",
-	},
-	// Add more events as needed
-}
-
-var servers = []templates.Server{
-	{
-		ServerID: "1",
-		URL:      "/static/server1.png",
-		Name:     "Server A",
-		Type:     "video",
-	},
-	{
-		ServerID: "2",
-		URL:      "/static/server2.png",
-		Name:     "Server B",
-		Type:     "map",
-	},
+func authMiddleware(auth auth.Authenticator, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !auth.IsAuthenticated(r) {
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return
+		}
+		next.ServeHTTP(w, r)
+	}
 }
