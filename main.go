@@ -62,7 +62,10 @@ func main() {
 	dbStore := store.NewXormDbStore(engine)
 	appStore := store.NewCachedAppStore(dbStore, sessionManager)
 
-	authenticator := auth.NewOAuth2Authenticator(config, sessionManager, appStore)
+	authenticator, err := auth.NewOAuth2Authenticator(config, sessionManager, appStore)
+	if err != nil {
+		log.Fatalf("Failed to create OAuth2Authenticator: %v", err)
+	}
 	renderer := NewTemplRenderer()
 	viewRenderer := NewViewRenderer(appStore)
 	h := NewHandlers(authenticator, renderer, viewRenderer, sessionManager)

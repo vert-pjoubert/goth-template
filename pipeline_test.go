@@ -53,7 +53,10 @@ func TestPageRenderPipeline(t *testing.T) {
 	sessionKey := []byte("test-session-key")
 	sessionManager := auth.NewCookieSessionManager(sessionKey)
 	appStore := &mockAppStore{session: sessionManager}
-	authenticator := auth.NewOAuth2Authenticator(config, sessionManager, appStore)
+	authenticator, err := auth.NewOAuth2Authenticator(config, sessionManager, appStore)
+	if err != nil {
+		log.Fatalf("Failed to create OAuth2Authenticator: %v", err)
+	}
 	viewRenderer := NewViewRenderer(appStore)
 	h := NewHandlers(authenticator, NewTemplRenderer(), viewRenderer, sessionManager)
 
