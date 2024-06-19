@@ -2,6 +2,8 @@ package main
 
 import (
 	"net/http"
+	"path/filepath"
+	"strings"
 
 	"github.com/vert-pjoubert/goth-template/auth"
 	"github.com/vert-pjoubert/goth-template/templates"
@@ -88,6 +90,42 @@ func (h *Handlers) ViewHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.ViewRenderer.RenderView(w, r)
+}
+
+func secureFileServer(root http.FileSystem) http.Handler {
+	allowedExtensions := map[string]bool{
+		".css": true,
+	}
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Prevent directory traversal by cleaning the URL path
+		cleanPath := filepath.Clean(r.URL.Path)
+		if strings.Contains(cleanPath, "..") {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+
+		// Check for allowed file extensions
+		ext := strings.ToLower(filepath.Ext(cleanPath))
+		if !allowedExtensions[ext] {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+
+		// Ensure the file is within the static directory
+		if !strings.HasPrefix(cleanPath, "/static/") {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+
+		// Serve the file if it exists
+		http.FileServer(root).ServeHTTP(w, r)
+	})
 }
 
 // Helper functions

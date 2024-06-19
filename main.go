@@ -49,7 +49,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load environment config: %v", err)
 	}
-
+	staticDir := "static"
 	engine := initDB(config)
 
 	keyPairsDir := config["SESSION_KEY_PAIRS_DIR"]
@@ -67,7 +67,7 @@ func main() {
 	viewRenderer := NewViewRenderer(appStore)
 	h := NewHandlers(authenticator, renderer, viewRenderer, sessionManager)
 
-	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+	http.Handle("/static/", http.StripPrefix("/static/", secureFileServer(http.Dir(staticDir))))
 	http.HandleFunc("/", h.IndexHandler)
 	http.HandleFunc("/view", authMiddleware(authenticator, viewRenderer.RenderView))
 	http.HandleFunc("/layout", h.LayoutHandler)
