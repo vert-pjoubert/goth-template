@@ -43,7 +43,7 @@ The website template leverages Go Templ for server-side rendering of HTML templa
 **Authentication Check**
 
 - The `IsAuthenticated` function checks if a valid session cookie is present.
-- If not authenticated, certain routes respond with a `401 Unauthorized` status, which HTMX intercepts to redirect users to the login page.
+- If not authenticated, certain routes respond with a `401 Unauthorized` status.
 
 #### 4. **Database Integration with XORM**
 
