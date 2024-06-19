@@ -8,6 +8,10 @@ This documentation provides an overview of the architecture and functionalities 
 
 The website template leverages Go Templ for server-side rendering of HTML templates and HTMX for enhancing the user experience with AJAX capabilities. This combination allows for dynamic and interactive web pages while maintaining a clean and efficient server-side rendering process. Additionally, it supports OAuth2 authentication and integrates XORM for database interactions with MySQL.
 
+```starting the server
+go run render.go handlers.go main.go config.go interfaces.go
+```
+
 #### 2. **Page Rendering**
 
 **Layout Template**
