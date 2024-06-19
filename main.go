@@ -1,14 +1,13 @@
 package main
 
 import (
+	"encoding/gob"
 	"fmt"
 	"log"
 	"net/http"
-	"os"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/gorilla/sessions"
-	"github.com/joho/godotenv"
 	"github.com/vert-pjoubert/goth-template/auth"
 	"github.com/vert-pjoubert/goth-template/store"
 	"github.com/vert-pjoubert/goth-template/store/models"
@@ -16,17 +15,18 @@ import (
 )
 
 func init() {
-	if err := godotenv.Load(); err != nil {
-		log.Fatal("Error loading .env file")
+	if _, err := LoadEnvConfig(".env"); err != nil {
+		log.Fatal("Error loading .env file: ", err)
 	}
+	gob.Register(time.Time{})
 }
 
-func initDB() *xorm.Engine {
-	dbUser := os.Getenv("DB_USER")
-	dbPassword := os.Getenv("DB_PASSWORD")
-	dbHost := os.Getenv("DB_HOST")
-	dbPort := os.Getenv("DB_PORT")
-	dbName := os.Getenv("DB_NAME")
+func initDB(config map[string]string) *xorm.Engine {
+	dbUser := config["DB_USER"]
+	dbPassword := config["DB_PASSWORD"]
+	dbHost := config["DB_HOST"]
+	dbPort := config["DB_PORT"]
+	dbName := config["DB_NAME"]
 
 	dataSourceName := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8&parseTime=True&loc=Local",
 		dbUser, dbPassword, dbHost, dbPort, dbName)
@@ -45,14 +45,27 @@ func initDB() *xorm.Engine {
 }
 
 func main() {
-	engine := initDB()
-	sessionStore := sessions.NewCookieStore([]byte(os.Getenv("SESSION_KEY")))
+	config, err := LoadEnvConfig(".env")
+	if err != nil {
+		log.Fatalf("Failed to load environment config: %v", err)
+	}
+
+	engine := initDB(config)
+
+	keyPairsDir := config["SESSION_KEY_PAIRS_DIR"]
+	keyPairs, err := auth.LoadKeyPairsFromDir(keyPairsDir)
+	if err != nil {
+		log.Fatalf("Failed to load key pairs: %v", err)
+	}
+
+	sessionManager := auth.NewCookieSessionManager(keyPairs...)
 	dbStore := store.NewXormDbStore(engine)
-	appStore := store.NewCachedAppStore(dbStore, sessionStore)
-	authenticator := auth.NewOAuth2Authenticator(sessionStore)
+	appStore := store.NewCachedAppStore(dbStore, sessionManager)
+
+	authenticator := auth.NewOAuth2Authenticator(config, sessionManager, appStore)
 	renderer := NewTemplRenderer()
 	viewRenderer := NewViewRenderer(appStore)
-	h := NewHandlers(authenticator, renderer, viewRenderer)
+	h := NewHandlers(authenticator, renderer, viewRenderer, sessionManager)
 
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 	http.HandleFunc("/", h.IndexHandler)
@@ -66,9 +79,13 @@ func main() {
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
-func authMiddleware(auth auth.Authenticator, next http.HandlerFunc) http.HandlerFunc {
+func authMiddleware(auth IAuthenticator, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !auth.IsAuthenticated(r) {
+		authenticated, err := auth.IsAuthenticated(w, r)
+		if err != nil {
+			log.Printf("Authentication error: %v", err)
+		}
+		if !authenticated {
 			http.Redirect(w, r, "/login", http.StatusFound)
 			return
 		}
