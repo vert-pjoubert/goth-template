@@ -94,7 +94,11 @@ func (h *Handlers) ViewHandler(w http.ResponseWriter, r *http.Request) {
 
 func secureFileServer(root http.FileSystem) http.Handler {
 	allowedExtensions := map[string]bool{
-		".css": true,
+		".css":  true,
+		".svg":  true,
+		".png":  true,
+		".jpg":  true,
+		".jpeg": true,
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
