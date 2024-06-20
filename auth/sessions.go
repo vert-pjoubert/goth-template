@@ -41,10 +41,10 @@ func NewCookieSessionManager(authKeyHex, encKeyHex string) (*CookieSessionManage
 	store := sessions.NewCookieStore(authKey, encKey)
 
 	// Set session options
-	sessionMaxAgeStr := os.Getenv("AUTH_SESSION_MAX_AGE")
+	sessionMaxAgeStr := os.Getenv("SESSION_EXPIRATION_SECONDS")
 	sessionMaxAge, err := strconv.Atoi(sessionMaxAgeStr)
 	if err != nil || sessionMaxAge <= 0 {
-		log.Printf("Invalid or missing AUTH_SESSION_MAX_AGE, defaulting to %d seconds", DefaultSessionExpiration)
+		log.Printf("Invalid or missing SESSION_EXPIRATION_SECONDS, defaulting to %d seconds", DefaultSessionExpiration)
 		sessionMaxAge = DefaultSessionExpiration
 	}
 
