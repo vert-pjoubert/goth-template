@@ -1,32 +1,16 @@
 package auth
 
 import (
-	"encoding/hex"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
-	"time"
 )
 
 // Helper function to initialize the session manager
 func initializeSessionManager(authKeyHex, encKeyHex string) (*CookieSessionManager, error) {
-	authKey, err := hex.DecodeString(authKeyHex)
-	if err != nil {
-		return nil, err
-	}
-	encKey, err := hex.DecodeString(encKeyHex)
-	if err != nil {
-		return nil, err
-	}
-	store := sessions.NewCookieStore(authKey, encKey)
-	store.Options = &sessions.Options{
-		Path:     "/",
-		MaxAge:   86400 * 7, // 1 week
-		HttpOnly: true,
-		Secure:   true,
-	}
-	return &CookieSessionManager{store: store}, nil
+	return NewCookieSessionManager(authKeyHex, encKeyHex)
 }
 
 // Test function for session manager
@@ -64,7 +48,7 @@ func TestSessionStoreWithRSA(t *testing.T) {
 	tests := []struct {
 		name       string
 		setup      func(req *http.Request, sessionManager *CookieSessionManager) (*httptest.ResponseRecorder, *http.Request)
-		verify     func(t *testing.T, session *sessions.Session)
+		verify     func(t *testing.T, sessionManager *CookieSessionManager, req *http.Request)
 		shouldFail bool
 	}{
 		{
@@ -75,7 +59,7 @@ func TestSessionStoreWithRSA(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Failed to get session: %v", err)
 				}
-				session.Values["key"] = "value"
+				session.Values["user"] = "test@example.com"
 				err = sessionManager.SaveSession(req, w, session)
 				if err != nil {
 					t.Fatalf("Failed to save session: %v", err)
@@ -88,9 +72,14 @@ func TestSessionStoreWithRSA(t *testing.T) {
 				}
 				return w, req2
 			},
-			verify: func(t *testing.T, session *sessions.Session) {
-				if session.Values["key"] != "value" {
-					t.Fatalf("Expected session value 'value', got '%v'", session.Values["key"])
+			verify: func(t *testing.T, sessionManager *CookieSessionManager, req *http.Request) {
+				session, err := sessionManager.GetSession(req)
+				if err != nil {
+					t.Fatalf("Failed to get session: %v", err)
+				}
+				log.Printf("Session values: %v", session.Values)
+				if session.Values["user"] != "test@example.com" {
+					t.Fatalf("Expected session value 'test@example.com', got '%v'", session.Values["user"])
 				}
 			},
 			shouldFail: false,
@@ -103,8 +92,7 @@ func TestSessionStoreWithRSA(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Failed to get session: %v", err)
 				}
-				session.Values["key"] = "value"
-				session.Options.MaxAge = -1 // Expire immediately
+				session.Values["user"] = "test@example.com"
 				err = sessionManager.SaveSession(req, w, session)
 				if err != nil {
 					t.Fatalf("Failed to save session: %v", err)
@@ -115,11 +103,47 @@ func TestSessionStoreWithRSA(t *testing.T) {
 				for _, cookie := range w.Result().Cookies() {
 					req2.AddCookie(cookie)
 				}
-				return w, req2
+
+				// Simulate session expiration by setting MaxAge to -1 in a separate request
+				expireReq := httptest.NewRequest("GET", "http://example.com", nil)
+				for _, cookie := range w.Result().Cookies() {
+					expireReq.AddCookie(cookie)
+				}
+				expireW := httptest.NewRecorder()
+				expireSession, err := sessionManager.GetSession(expireReq)
+				if err != nil {
+					t.Fatalf("Failed to get session: %v", err)
+				}
+				log.Printf("MaxAge before setting: %d", expireSession.Options.MaxAge)
+				expireSession.Options.MaxAge = -1
+				log.Printf("MaxAge before saving: %d", expireSession.Options.MaxAge)
+				err = sessionManager.SaveSession(expireReq, expireW, expireSession)
+				if err != nil {
+					t.Fatalf("Failed to save session: %v", err)
+				}
+				log.Printf("Save Session Responce Cookie: %s", expireW.Result().Cookies())
+				// Clear cookies in expireReq before adding expired cookies
+				expireReq.Header.Del("Cookie")
+				for _, cookie := range expireW.Result().Cookies() {
+					expireReq.AddCookie(cookie)
+				}
+
+				// Log the cookies in expireReq
+				for _, cookie := range expireReq.Cookies() {
+					log.Printf("Cookie in request: %s = %s; Expires: %s; MaxAge: %d, HttpOnly: %t, Secure: %t", cookie.Name, cookie.Value, cookie.Expires, cookie.MaxAge, cookie.HttpOnly, cookie.Secure)
+				}
+
+				return expireW, expireReq
 			},
-			verify: func(t *testing.T, session *sessions.Session) {
-				if _, ok := session.Values["key"]; ok {
-					t.Fatalf("Expected session value to be expired, but found '%v'", session.Values["key"])
+			verify: func(t *testing.T, sessionManager *CookieSessionManager, req *http.Request) {
+				session, err := sessionManager.GetSession(req)
+				if err != nil {
+					t.Fatalf("Failed to get session: %v", err)
+				}
+				log.Printf("Session MaxAge: %d", session.Options.MaxAge)
+				log.Printf("Session values after expiration: %v", session.Values)
+				if len(session.Values) > 0 {
+					t.Fatalf("Expected session to be empty, but found values: %v", session.Values)
 				}
 			},
 			shouldFail: false,
@@ -129,17 +153,8 @@ func TestSessionStoreWithRSA(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest("GET", "http://example.com", nil)
-			w, req2 := tt.setup(req, sessionManager)
-			session, err := sessionManager.GetSession(req2)
-			if err != nil && !tt.shouldFail {
-				t.Fatalf("Failed to get session: %v", err)
-			}
-			if err == nil && tt.shouldFail {
-				t.Fatalf("Expected an error but got none")
-			}
-			if err == nil {
-				tt.verify(t, session)
-			}
+			_, req2 := tt.setup(req, sessionManager)
+			tt.verify(t, sessionManager, req2)
 		})
 	}
 }

@@ -16,6 +16,14 @@ import (
 	"golang.org/x/oauth2"
 )
 
+// IAuthenticator interface, Do not alter. Main HARD depends on this interface.
+type IAuthenticator interface {
+	LoginHandler(http.ResponseWriter, *http.Request)
+	CallbackHandler(http.ResponseWriter, *http.Request)
+	LogoutHandler(http.ResponseWriter, *http.Request)
+	IsAuthenticated(w http.ResponseWriter, r *http.Request) (bool, error)
+}
+
 // TokenCacheEntry represents an entry in the token cache
 type TokenCacheEntry struct {
 	Valid       bool
@@ -285,6 +293,8 @@ func (a *OAuth2Authenticator) CallbackHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	session.Values["id_token"] = rawIDToken
+	session.Values["token"] = oauth2Token.AccessToken
+	session.Values["refresh_token"] = oauth2Token.RefreshToken
 	session.Values["user"] = storedUser.Email
 	session.Values["role"] = storedUser.Role.Name
 	session.Values["created_at"] = time.Now()
