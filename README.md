@@ -33,10 +33,11 @@ go run render.go handlers.go main.go config.go interfaces.go
 
 #### 3. **Authentication**
 
-**OAuth2 Integration**
+**OpenID Connect Integration**
 
-- The template supports OAuth2 authentication using Google or any other OAuth2-compliant provider.
-- The `OAuth2Authenticator` handles the OAuth2 login flow, including redirecting to the provider, handling callbacks, and managing sessions.
+- The template supports authentication using Google or any other OAuth2-compliant provider via the OpenID connect protocol.
+- The `OAuth2Authenticator` handles the login flow, including redirecting to the provider, handling callbacks, and managing sessions.
+- No client-side java script is needed.
 
 **Login Handler**
 
