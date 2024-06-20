@@ -1,5 +1,3 @@
-### Updated README.md
-
 ### Go Templ + HTMX Website Template Documentation
 
 This documentation provides an overview of the architecture and functionalities of the Go Templ + HTMX website template. It covers how we render pages, handle authentication, manage theme switching, and integrate with OAuth2 and XORM for database interactions. The goal is to give a clear understanding of how the components work together without diving into large code samples.
@@ -33,10 +31,11 @@ go run render.go handlers.go main.go config.go interfaces.go
 
 #### 3. **Authentication**
 
-**OAuth2 Integration**
+**OpenID Connect Integration**
 
-- The template supports OAuth2 authentication using Google or any other OAuth2-compliant provider.
-- The `OAuth2Authenticator` handles the OAuth2 login flow, including redirecting to the provider, handling callbacks, and managing sessions.
+- The template supports authentication using Google or any other OAuth2-compliant provider via the OpenID connect protocol.
+- The `OAuth2Authenticator` handles the login flow, including redirecting to the provider, handling callbacks, and managing sessions.
+- No client-side java script is needed.
 
 **Login Handler**
 
