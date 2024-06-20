@@ -67,7 +67,11 @@ func handleJSONFields(m map[string]interface{}, jsonFields []string) error {
 				if err := json.Unmarshal(v, &temp); err != nil {
 					return err
 				}
-				m[field] = temp
+				if temp == nil {
+					m[field] = nil
+				} else {
+					m[field] = temp
+				}
 			case string:
 				if len(v) == 0 {
 					m[field] = nil
@@ -77,8 +81,14 @@ func handleJSONFields(m map[string]interface{}, jsonFields []string) error {
 				if err := json.Unmarshal([]byte(v), &temp); err != nil {
 					return err
 				}
-				m[field] = temp
+				if temp == nil {
+					m[field] = nil
+				} else {
+					m[field] = temp
+				}
 			}
+		} else {
+			m[field] = nil
 		}
 	}
 	return nil
