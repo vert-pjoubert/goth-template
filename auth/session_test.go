@@ -1,12 +1,35 @@
 package auth
 
 import (
-	"log"
+	"encoding/hex"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 )
 
+// Helper function to initialize the session manager
+func initializeSessionManager(authKeyHex, encKeyHex string) (*CookieSessionManager, error) {
+	authKey, err := hex.DecodeString(authKeyHex)
+	if err != nil {
+		return nil, err
+	}
+	encKey, err := hex.DecodeString(encKeyHex)
+	if err != nil {
+		return nil, err
+	}
+	store := sessions.NewCookieStore(authKey, encKey)
+	store.Options = &sessions.Options{
+		Path:     "/",
+		MaxAge:   86400 * 7, // 1 week
+		HttpOnly: true,
+		Secure:   true,
+	}
+	return &CookieSessionManager{store: store}, nil
+}
+
+// Test function for session manager
 func TestSessionStoreWithRSA(t *testing.T) {
 	// Open a log file
 	logFile, err := os.OpenFile("session_test.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
@@ -27,44 +50,96 @@ func TestSessionStoreWithRSA(t *testing.T) {
 	if authKey == "" {
 		authKey = defaultAuthKey
 	}
-
 	encKey := os.Getenv("SESSION_ENC_KEY")
 	if encKey == "" {
 		encKey = defaultEncKey
 	}
 
-	sessionManager, err := NewCookieSessionManager(authKey, encKey)
+	sessionManager, err := initializeSessionManager(authKey, encKey)
 	if err != nil {
-		log.Fatalf("Failed to initialize session manager: %v", err)
+		t.Fatalf("Failed to initialize session manager: %v", err)
 	}
 
-	// Create a new session and store a value
-	req := httptest.NewRequest("GET", "http://example.com", nil)
-	w := httptest.NewRecorder()
+	// Table-driven test cases
+	tests := []struct {
+		name       string
+		setup      func(req *http.Request, sessionManager *CookieSessionManager) (*httptest.ResponseRecorder, *http.Request)
+		verify     func(t *testing.T, session *sessions.Session)
+		shouldFail bool
+	}{
+		{
+			name: "Basic session set and get",
+			setup: func(req *http.Request, sessionManager *CookieSessionManager) (*httptest.ResponseRecorder, *http.Request) {
+				w := httptest.NewRecorder()
+				session, err := sessionManager.GetSession(req)
+				if err != nil {
+					t.Fatalf("Failed to get session: %v", err)
+				}
+				session.Values["key"] = "value"
+				err = sessionManager.SaveSession(req, w, session)
+				if err != nil {
+					t.Fatalf("Failed to save session: %v", err)
+				}
 
-	session, err := sessionManager.GetSession(req)
-	if err != nil {
-		log.Fatalf("Failed to get session: %v", err)
+				// Create a new request and add cookies from the response
+				req2 := httptest.NewRequest("GET", "http://example.com", nil)
+				for _, cookie := range w.Result().Cookies() {
+					req2.AddCookie(cookie)
+				}
+				return w, req2
+			},
+			verify: func(t *testing.T, session *sessions.Session) {
+				if session.Values["key"] != "value" {
+					t.Fatalf("Expected session value 'value', got '%v'", session.Values["key"])
+				}
+			},
+			shouldFail: false,
+		},
+		{
+			name: "Session expiration",
+			setup: func(req *http.Request, sessionManager *CookieSessionManager) (*httptest.ResponseRecorder, *http.Request) {
+				w := httptest.NewRecorder()
+				session, err := sessionManager.GetSession(req)
+				if err != nil {
+					t.Fatalf("Failed to get session: %v", err)
+				}
+				session.Values["key"] = "value"
+				session.Options.MaxAge = -1 // Expire immediately
+				err = sessionManager.SaveSession(req, w, session)
+				if err != nil {
+					t.Fatalf("Failed to save session: %v", err)
+				}
+
+				// Create a new request and add cookies from the response
+				req2 := httptest.NewRequest("GET", "http://example.com", nil)
+				for _, cookie := range w.Result().Cookies() {
+					req2.AddCookie(cookie)
+				}
+				return w, req2
+			},
+			verify: func(t *testing.T, session *sessions.Session) {
+				if _, ok := session.Values["key"]; ok {
+					t.Fatalf("Expected session value to be expired, but found '%v'", session.Values["key"])
+				}
+			},
+			shouldFail: false,
+		},
 	}
 
-	session.Values["key"] = "value"
-	err = sessionManager.SaveSession(req, w, session)
-	if err != nil {
-		log.Fatalf("Failed to save session: %v", err)
-	}
-
-	// Retrieve the session and check the value
-	req2 := httptest.NewRequest("GET", "http://example.com", nil)
-	for _, cookie := range w.Result().Cookies() {
-		req2.AddCookie(cookie)
-	}
-
-	session2, err := sessionManager.GetSession(req2)
-	if err != nil {
-		log.Fatalf("Failed to get session: %v", err)
-	}
-
-	if session2.Values["key"] != "value" {
-		log.Fatalf("Expected session value 'value', got '%v'", session2.Values["key"])
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "http://example.com", nil)
+			w, req2 := tt.setup(req, sessionManager)
+			session, err := sessionManager.GetSession(req2)
+			if err != nil && !tt.shouldFail {
+				t.Fatalf("Failed to get session: %v", err)
+			}
+			if err == nil && tt.shouldFail {
+				t.Fatalf("Expected an error but got none")
+			}
+			if err == nil {
+				tt.verify(t, session)
+			}
+		})
 	}
 }
