@@ -8,6 +8,10 @@ This documentation provides an overview of the architecture and functionalities 
 
 The website template leverages Go Templ for server-side rendering of HTML templates and HTMX for enhancing the user experience with AJAX capabilities. This combination allows for dynamic and interactive web pages while maintaining a clean and efficient server-side rendering process. Additionally, it supports OAuth2 authentication and integrates XORM for database interactions with MySQL.
 
+```starting the server
+go run render.go handlers.go main.go config.go interfaces.go
+```
+
 #### 2. **Page Rendering**
 
 **Layout Template**
@@ -102,7 +106,3 @@ The website template leverages Go Templ for server-side rendering of HTML templa
 
 - Event listeners, such as for unauthorized responses, are added to handle specific scenarios dynamically.
 - These listeners enhance user experience by providing immediate feedback and actions without requiring full page reloads.
-
-### Summary
-
-This Go Templ + HTMX website template provides a robust structure for building interactive and dynamic web applications. By leveraging server-side rendering for initial page loads and HTMX for dynamic updates, the template ensures a smooth user experience while maintaining the simplicity and efficiency of server-rendered HTML. The template also includes mechanisms for handling authentication and theme switching, making it a comprehensive solution for modern web development. With built-in support for OAuth2 authentication and XORM for MySQL database integration, it offers a solid foundation for secure and scalable applications. The `AppStore` interface manages application state efficiently, providing a seamless way to handle user sessions and data retrieval within the view renderer.

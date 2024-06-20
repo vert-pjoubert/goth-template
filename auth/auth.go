@@ -2,126 +2,335 @@ package auth
 
 import (
 	"context"
-	"encoding/json"
+	"crypto/rand"
+	"encoding/base64"
+	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
+	"github.com/coreos/go-oidc"
 	"github.com/gorilla/sessions"
+	"github.com/vert-pjoubert/goth-template/store/models"
 	"golang.org/x/oauth2"
 )
 
-type User struct {
-	Email string
-	Name  string
-	Role  string
-}
-
-type Authenticator interface {
+// IAuthenticator interface, Do not alter. Main HARD depends on this interface.
+type IAuthenticator interface {
 	LoginHandler(http.ResponseWriter, *http.Request)
 	CallbackHandler(http.ResponseWriter, *http.Request)
 	LogoutHandler(http.ResponseWriter, *http.Request)
-	IsAuthenticated(*http.Request) bool
+	IsAuthenticated(w http.ResponseWriter, r *http.Request) (bool, error)
 }
 
+// TokenCacheEntry represents an entry in the token cache
+type TokenCacheEntry struct {
+	Valid       bool
+	ValidatedAt time.Time
+	AccessToken string
+}
+
+type IAppStore interface {
+	GetUserWithRoleByEmail(email string) (*models.User, error)
+	CreateUserWithRole(user *models.User, role *models.Role) error
+	GetSession(r *http.Request) (*sessions.Session, error)
+	SaveSession(session *sessions.Session, r *http.Request, w http.ResponseWriter) error
+	GetServers(servers *[]models.Server) error
+	GetEvents(events *[]models.Event) error
+}
+
+// OAuth2Authenticator implements the IAuthenticator interface using OAuth2 and OpenID Connect
 type OAuth2Authenticator struct {
-	Config      *oauth2.Config
-	State       string
-	Store       *sessions.CookieStore
-	UserInfoURL string
+	Config                *oauth2.Config
+	Verifier              *oidc.IDTokenVerifier
+	Session               ISessionManager
+	Store                 IAppStore
+	TokenCache            ICache
+	TokenExpiryTime       time.Duration
+	SessionExpiryDuration time.Duration
+	Ctx                   context.Context
+	LogFile               *os.File
 }
 
-func NewOAuth2Authenticator(store *sessions.CookieStore) *OAuth2Authenticator {
-	config := &oauth2.Config{
-		ClientID:     os.Getenv("OAUTH2_CLIENT_ID"),
-		ClientSecret: os.Getenv("OAUTH2_CLIENT_SECRET"),
-		Endpoint: oauth2.Endpoint{
-			AuthURL:  os.Getenv("OAUTH2_AUTH_URL"),
-			TokenURL: os.Getenv("OAUTH2_TOKEN_URL"),
-		},
-		RedirectURL: os.Getenv("OAUTH2_REDIRECT_URL"),
-		Scopes:      []string{"openid", "email", "profile"},
+// NewOAuth2Authenticator initializes a new OAuth2Authenticator
+func NewOAuth2Authenticator(config map[string]string, sessionManager ISessionManager, store IAppStore) (*OAuth2Authenticator, error) {
+	provider, err := oidc.NewProvider(context.Background(), config["OAUTH2_ISSUER_URL"])
+	if err != nil {
+		return nil, err
+	}
+
+	oidcConfig := &oidc.Config{
+		ClientID: config["OAUTH2_CLIENT_ID"],
+	}
+
+	verifier := provider.Verifier(oidcConfig)
+
+	oauth2Config := &oauth2.Config{
+		ClientID:     config["OAUTH2_CLIENT_ID"],
+		ClientSecret: config["OAUTH2_CLIENT_SECRET"],
+		Endpoint:     provider.Endpoint(),
+		RedirectURL:  config["OAUTH2_REDIRECT_URL"],
+		Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
+	}
+
+	expiryTime, err := strconv.Atoi(config["TOKEN_EXPIRATION_TIME_SECONDS"])
+	if err != nil {
+		expiryTime = 6000 // default value
+	}
+
+	sessionExpiry, err := strconv.Atoi(config["SESSION_EXPIRATION_SECONDS"])
+	if err != nil {
+		sessionExpiry = 3600 // default value
+	}
+
+	// Initialize LRU cache with a maximum size of 1000 entries
+	tokenCache, err := NewLRUCache(1000)
+	if err != nil {
+		return nil, err
+	}
+
+	// Initialize log file
+	logFile, err := os.OpenFile("./auth.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return nil, err
 	}
 
 	return &OAuth2Authenticator{
-		Config:      config,
-		State:       "pseudo-random-string", // This should be more securely generated
-		Store:       store,
-		UserInfoURL: os.Getenv("OAUTH2_USERINFO_URL"),
+		Config:                oauth2Config,
+		Verifier:              verifier,
+		Session:               sessionManager,
+		Store:                 store,
+		TokenCache:            tokenCache,
+		TokenExpiryTime:       time.Duration(expiryTime) * time.Second,
+		SessionExpiryDuration: time.Duration(sessionExpiry) * time.Second,
+		Ctx:                   context.Background(),
+		LogFile:               logFile,
+	}, nil
+}
+
+// logMessage logs a message to the auth.log file
+func (a *OAuth2Authenticator) logMessage(message string) {
+	log.SetOutput(a.LogFile)
+	log.Println(message)
+}
+
+// getSessionWithExpiryCheck wraps session retrieval and checks if the session is expired
+func (a *OAuth2Authenticator) getSessionWithExpiryCheck(w http.ResponseWriter, r *http.Request) (*sessions.Session, bool) {
+	session, err := a.Session.GetSession(r)
+	if err != nil {
+		a.logMessage("Session retrieval error: " + err.Error())
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return nil, false
 	}
+
+	createdAt, ok := session.Values["created_at"].(time.Time)
+	if !ok || time.Since(createdAt) > a.SessionExpiryDuration {
+		a.logMessage("Session expired")
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return nil, false
+	}
+
+	return session, true
 }
 
-func NewOAuth2AuthenticatorWithConfig(config *oauth2.Config, state string, store *sessions.CookieStore) *OAuth2Authenticator {
-	return &OAuth2Authenticator{Config: config, State: state, Store: store}
+// refreshAccessToken refreshes the access token using the refresh token
+func (a *OAuth2Authenticator) refreshAccessToken(refreshToken string) (*oauth2.Token, error) {
+	tokenSource := a.Config.TokenSource(a.Ctx, &oauth2.Token{RefreshToken: refreshToken})
+	newToken, err := tokenSource.Token()
+	if err != nil {
+		a.logMessage("Failed to refresh access token: " + err.Error())
+		return nil, err
+	}
+	return newToken, nil
 }
 
+// IsAuthenticated checks if the user is authenticated and returns (bool, error)
+func (a *OAuth2Authenticator) IsAuthenticated(w http.ResponseWriter, r *http.Request) (bool, error) {
+	session, valid := a.getSessionWithExpiryCheck(w, r)
+	if !valid {
+		return false, nil
+	}
+
+	idTokenStr, ok := session.Values["id_token"].(string)
+	if !ok || idTokenStr == "" {
+		a.logMessage("ID token missing in session")
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return false, nil
+	}
+
+	// Check the cache for the token validation result
+	if cacheEntry, found := a.TokenCache.Get(idTokenStr); found {
+		if entry, ok := cacheEntry.(TokenCacheEntry); ok {
+			if entry.Valid && time.Since(entry.ValidatedAt) < a.TokenExpiryTime {
+				return true, nil
+			}
+		}
+	}
+
+	// Validate the ID token
+	idToken, err := a.Verifier.Verify(a.Ctx, idTokenStr)
+	if err != nil {
+		a.logMessage("ID token verification failed: " + err.Error())
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return false, err
+	}
+
+	// Extract claims (e.g., expiration time)
+	var claims struct {
+		Expiry int64 `json:"exp"`
+	}
+	if err := idToken.Claims(&claims); err != nil {
+		a.logMessage("Failed to parse ID token claims: " + err.Error())
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return false, err
+	}
+
+	// Check if the token is near expiry and refresh if needed
+	if time.Unix(claims.Expiry, 0).Before(time.Now()) {
+		refreshToken, ok := session.Values["refresh_token"].(string)
+		if !ok || refreshToken == "" {
+			a.logMessage("Refresh token missing or empty in session")
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return false, nil
+		}
+
+		newToken, err := a.refreshAccessToken(refreshToken)
+		if err != nil {
+			a.logMessage("Failed to refresh access token: " + err.Error())
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return false, err
+		}
+
+		// Store the new tokens in the session
+		idTokenStr = newToken.Extra("id_token").(string)
+		session.Values["id_token"] = idTokenStr
+		session.Values["token"] = newToken.AccessToken
+		session.Values["refresh_token"] = newToken.RefreshToken
+		if err := a.Session.SaveSession(r, w, session); err != nil {
+			a.logMessage("Error saving session: " + err.Error())
+			return false, err
+		}
+	}
+
+	// Update the cache
+	a.TokenCache.Add(idTokenStr, TokenCacheEntry{
+		Valid:       true,
+		ValidatedAt: time.Now(),
+		AccessToken: idTokenStr,
+	})
+
+	return true, nil
+}
+
+// LoginHandler handles the login process
 func (a *OAuth2Authenticator) LoginHandler(w http.ResponseWriter, r *http.Request) {
-	session, _ := a.Store.Get(r, "auth-session")
-	state := generateStateOauthCookie(w)
-	session.Values["state"] = state
-	session.Save(r, w)
+	state, err := generateRandomString(32)
+	if err != nil {
+		a.logMessage("Failed to generate state: " + err.Error())
+		http.Error(w, "Failed to generate state", http.StatusInternalServerError)
+		return
+	}
 
-	url := a.Config.AuthCodeURL(state, oauth2.AccessTypeOffline)
+	session, _ := a.Session.GetSession(r)
+	session.Values["state"] = state
+	if err := a.Session.SaveSession(r, w, session); err != nil {
+		a.logMessage("Failed to save session: " + err.Error())
+		http.Error(w, "Failed to save session", http.StatusInternalServerError)
+		return
+	}
+
+	url := a.Config.AuthCodeURL(state)
+	a.logMessage("Redirecting to: " + url)
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
 
-func generateStateOauthCookie(w http.ResponseWriter) string {
-	var expiration = time.Now().Add(365 * 24 * time.Hour)
-	state := "pseudo-random-string" // This should be more securely generated
-	cookie := http.Cookie{Name: "oauthstate", Value: state, Expires: expiration}
-	http.SetCookie(w, &cookie)
-	return state
-}
-
+// CallbackHandler handles the callback from the OAuth2 provider
 func (a *OAuth2Authenticator) CallbackHandler(w http.ResponseWriter, r *http.Request) {
-	session, _ := a.Store.Get(r, "auth-session")
-
-	state := r.FormValue("state")
-	if state != session.Values["state"] {
-		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+	session, _ := a.Session.GetSession(r)
+	storedState, ok := session.Values["state"].(string)
+	if !ok || storedState != r.URL.Query().Get("state") {
+		a.logMessage("Invalid state parameter")
+		http.Error(w, "Invalid state parameter", http.StatusBadRequest)
 		return
 	}
 
-	code := r.FormValue("code")
-	token, err := a.Config.Exchange(context.Background(), code)
+	oauth2Token, err := a.Config.Exchange(a.Ctx, r.URL.Query().Get("code"))
 	if err != nil {
-		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		a.logMessage("Failed to exchange token: " + err.Error())
+		http.Error(w, "Failed to exchange token: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	client := a.Config.Client(context.Background(), token)
-	resp, err := client.Get(a.UserInfoURL)
+	rawIDToken, ok := oauth2Token.Extra("id_token").(string)
+	if !ok {
+		a.logMessage("No id_token field in oauth2 token")
+		http.Error(w, "No id_token field in oauth2 token", http.StatusInternalServerError)
+		return
+	}
+
+	idToken, err := a.Verifier.Verify(a.Ctx, rawIDToken)
 	if err != nil {
-		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
-		return
-	}
-	defer resp.Body.Close()
-
-	var user User
-	if err := json.NewDecoder(resp.Body).Decode(&user); err != nil {
-		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		a.logMessage("Failed to verify ID Token: " + err.Error())
+		http.Error(w, "Failed to verify ID Token: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	user.Role = "user" // Default role; ideally this should come from your user management system or OAuth provider
+	var claims struct {
+		Email string `json:"email"`
+	}
+	if err := idToken.Claims(&claims); err != nil {
+		a.logMessage("Failed to parse ID Token claims: " + err.Error())
+		http.Error(w, "Failed to parse ID Token claims: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 
-	session.Values["user"] = user.Email
-	session.Values["role"] = user.Role
-	session.Save(r, w)
+	storedUser, err := a.Store.GetUserWithRoleByEmail(claims.Email)
+	if err != nil {
+		a.logMessage("Failed to retrieve user: " + err.Error())
+		http.Error(w, "Failed to retrieve user: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 
+	session.Values["id_token"] = rawIDToken
+	session.Values["token"] = oauth2Token.AccessToken
+	session.Values["refresh_token"] = oauth2Token.RefreshToken
+	session.Values["user"] = storedUser.Email
+	session.Values["role"] = storedUser.Role.Name
+	session.Values["created_at"] = time.Now()
+
+	if err := a.Session.SaveSession(r, w, session); err != nil {
+		a.logMessage("Failed to save session: " + err.Error())
+		http.Error(w, "Failed to save session", http.StatusInternalServerError)
+		return
+	}
+
+	a.logMessage("Login successful, redirecting to home page")
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-
+// LogoutHandler handles the logout process
 func (a *OAuth2Authenticator) LogoutHandler(w http.ResponseWriter, r *http.Request) {
-	session, _ := a.Store.Get(r, "auth-session")
+	session, err := a.Session.GetSession(r)
+	if err != nil {
+		a.logMessage("Error getting session: " + err.Error())
+		log.Printf("Error getting session: %v", err)
+	}
 	session.Options.MaxAge = -1
-	session.Save(r, w)
-	http.Redirect(w, r, "/login", http.StatusSeeOther)
+	err = a.Session.SaveSession(r, w, session)
+	if err != nil {
+		a.logMessage("Error saving session: " + err.Error())
+		log.Printf("Error saving session: %v", err)
+	}
+	a.logMessage("Logout successful, redirecting to login page")
+	http.Redirect(w, r, a.Config.Endpoint.AuthURL, http.StatusSeeOther)
 }
 
-func (a *OAuth2Authenticator) IsAuthenticated(r *http.Request) bool {
-	session, _ := a.Store.Get(r, "auth-session")
-	user, ok := session.Values["user"]
-	return ok && user != nil
+// generateRandomString generates a secure random string of the specified length.
+func generateRandomString(length int) (string, error) {
+	b := make([]byte, length)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(b)[:length], nil
 }

@@ -43,4 +43,5 @@ ehthumbs.db
 *.iml
 
 #tests
-.tests/
+.test/*
+*.log

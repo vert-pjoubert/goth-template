@@ -4,20 +4,21 @@ import (
 	"net/http"
 
 	"github.com/gorilla/sessions"
+	"github.com/vert-pjoubert/goth-template/auth"
 	"github.com/vert-pjoubert/goth-template/store/models"
 )
 
 type CachedAppStore struct {
 	dbStore DbStore
 	cache   map[string]*models.User
-	store   *sessions.CookieStore
+	session auth.ISessionManager
 }
 
-func NewCachedAppStore(dbStore DbStore, store *sessions.CookieStore) *CachedAppStore {
+func NewCachedAppStore(dbStore DbStore, session auth.ISessionManager) *CachedAppStore {
 	return &CachedAppStore{
 		dbStore: dbStore,
 		cache:   make(map[string]*models.User),
-		store:   store,
+		session: session,
 	}
 }
 
@@ -58,11 +59,11 @@ func (s *CachedAppStore) CreateUserWithRole(user *models.User, role *models.Role
 }
 
 func (s *CachedAppStore) GetSession(r *http.Request) (*sessions.Session, error) {
-	return s.store.Get(r, "auth-session")
+	return s.session.GetSession(r)
 }
 
 func (s *CachedAppStore) SaveSession(session *sessions.Session, r *http.Request, w http.ResponseWriter) error {
-	return session.Save(r, w)
+	return s.session.SaveSession(r, w, session)
 }
 
 func (s *CachedAppStore) GetServers(servers *[]models.Server) error {

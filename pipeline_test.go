@@ -2,12 +2,18 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/gob"
+	"encoding/hex"
+	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/a-h/templ"
 	"github.com/gorilla/sessions"
@@ -15,32 +21,70 @@ import (
 	"github.com/vert-pjoubert/goth-template/mockoauth2"
 	"github.com/vert-pjoubert/goth-template/store/models"
 	"github.com/vert-pjoubert/goth-template/templates"
-	"golang.org/x/oauth2"
 )
 
-// Test full page render pipeline
-func TestPageRenderPipeline(t *testing.T) {
-	// Set up mock OAuth2 provider
-	mockProvider := mockoauth2.NewMockOAuth2Provider()
-	defer mockProvider.Close()
+func init() {
+	gob.Register(time.Time{})
+}
 
-	// Set up OAuth2 config
-	oauth2Config := &oauth2.Config{
-		ClientID:     "mockclientid",
-		ClientSecret: "mockclientsecret",
-		RedirectURL:  "http://localhost:8080/oauth2/callback",
-		Endpoint: oauth2.Endpoint{
-			AuthURL:  mockProvider.Server.URL + "/auth",
-			TokenURL: mockProvider.Server.URL + "/token",
-		},
+// GenerateRandomHex generates a random hex string of the given length
+func GenerateRandomHex(n int) (string, error) {
+	bytes := make([]byte, n)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(bytes), nil
+}
+
+func TestPageRenderPipeline(t *testing.T) {
+	logFile, err := os.OpenFile("./test/dump/test.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		t.Fatalf("Failed to open log file: %v", err)
+	}
+	defer logFile.Close()
+
+	log.SetOutput(logFile)
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
+	log.Println("Starting TestPageRenderPipeline")
+
+	mockProvider := mockoauth2.NewMockOAuth2Provider()
+	defer mockProvider.Server.Close()
+
+	authKey, err := GenerateRandomHex(16) // Generate 32 characters hex string (16 bytes)
+	if err != nil {
+		t.Fatalf("Failed to generate authKey: %v", err)
 	}
 
-	// Set up dependencies
-	store := sessions.NewCookieStore([]byte("test-session-key"))
-	authenticator := auth.NewOAuth2AuthenticatorWithConfig(oauth2Config, "mockstate", store)
-	appStore := &mockAppStore{}
+	encKey, err := GenerateRandomHex(16) // Generate 32 characters hex string (16 bytes)
+	if err != nil {
+		t.Fatalf("Failed to generate encKey: %v", err)
+	}
+
+	config := map[string]string{
+		"OAUTH2_CLIENT_ID":              "mockclientid",
+		"OAUTH2_CLIENT_SECRET":          "mockclientsecret",
+		"OAUTH2_REDIRECT_URL":           "http://localhost:8080/oauth2/callback",
+		"OAUTH2_ISSUER_URL":             mockProvider.Server.URL,
+		"TOKEN_EXPIRATION_TIME_SECONDS": "6000",
+		"SESSION_EXPIRATION_SECONDS":    "3600",
+		"SESSION_AUTH_KEY":              authKey,
+		"SESSION_ENC_KEY":               encKey,
+	}
+
+	sessionManager, err := auth.NewCookieSessionManager(config["SESSION_AUTH_KEY"], config["SESSION_ENC_KEY"])
+	if err != nil {
+		log.Fatalf("Failed to initialize session manager: %v", err)
+	}
+
+	appStore := &mockAppStore{session: sessionManager}
+	authenticator, err := auth.NewOAuth2Authenticator(config, sessionManager, appStore)
+	if err != nil {
+		log.Fatalf("Failed to create OAuth2Authenticator: %v", err)
+	}
+
 	viewRenderer := NewViewRenderer(appStore)
-	h := NewHandlers(authenticator, NewTemplRenderer(), viewRenderer)
+	h := NewHandlers(authenticator, NewTemplRenderer(), viewRenderer, sessionManager)
 
 	testCases := []struct {
 		name   string
@@ -54,14 +98,58 @@ func TestPageRenderPipeline(t *testing.T) {
 	}
 
 	dumpDir := "./test/dump"
-	err := os.MkdirAll(dumpDir, 0755)
+	err = os.MkdirAll(dumpDir, 0755)
 	if err != nil {
 		t.Fatalf("Failed to create dump directory: %v", err)
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			log.Printf("Running test case: %s", tc.name)
+
+			// Simulate login
+			loginReq := httptest.NewRequest("GET", "/login", nil)
+			loginResp := httptest.NewRecorder()
+			h.LoginHandler(loginResp, loginReq)
+
+			log.Printf("Simulated login for test case: %s", tc.name)
+
+			// Transfer cookies to the next request
+			for _, cookie := range loginResp.Result().Cookies() {
+				loginReq.AddCookie(cookie)
+			}
+
+			session, _ := sessionManager.GetSession(loginReq)
+			state, ok := session.Values["state"].(string)
+			if !ok {
+				t.Fatalf("Failed to get state from session for test case: %s", tc.name)
+			}
+
+			log.Printf("State in session for test case %s: %s", tc.name, state)
+
+			callbackReq := httptest.NewRequest("GET", fmt.Sprintf("/oauth2/callback?code=mockcode&state=%s", state), nil)
+			for _, cookie := range loginResp.Result().Cookies() {
+				callbackReq.AddCookie(cookie)
+			}
+			callbackResp := httptest.NewRecorder()
+			authenticator.CallbackHandler(callbackResp, callbackReq)
+
+			log.Printf("Simulated callback for test case: %s", tc.name)
+
+			// Check session values after callback
+			session, _ = sessionManager.GetSession(callbackReq)
+			if session.Values["id_token"] == nil {
+				t.Fatalf("id_token not found in session for test case: %s", tc.name)
+			}
+			if session.Values["user"] == nil {
+				t.Fatalf("user not found in session for test case: %s", tc.name)
+			}
+
+			// Transfer cookies to the next request
 			req := httptest.NewRequest("GET", tc.url, nil)
+			for _, cookie := range callbackResp.Result().Cookies() {
+				req.AddCookie(cookie)
+			}
 			w := httptest.NewRecorder()
 
 			switch tc.url {
@@ -127,12 +215,16 @@ func TestPageRenderPipeline(t *testing.T) {
 				t.Fatalf("Failed to write dump file for %s: %v", tc.name, err)
 			}
 
-			t.Logf("Dumped %s to %s", tc.name, dumpPath)
+			log.Printf("Dumped %s to %s", tc.name, dumpPath)
 		})
 	}
+
+	log.Println("Completed TestPageRenderPipeline")
 }
 
-type mockAppStore struct{}
+type mockAppStore struct {
+	session auth.ISessionManager
+}
 
 func (m *mockAppStore) GetUserWithRoleByEmail(email string) (*models.User, error) {
 	return &models.User{
@@ -149,13 +241,11 @@ func (m *mockAppStore) CreateUserWithRole(user *models.User, role *models.Role) 
 }
 
 func (m *mockAppStore) GetSession(r *http.Request) (*sessions.Session, error) {
-	session, _ := sessions.NewCookieStore([]byte("test-session-key")).Get(r, "auth-session")
-	session.Values["user"] = "admin@example.com"
-	return session, nil
+	return m.session.GetSession(r)
 }
 
 func (m *mockAppStore) SaveSession(session *sessions.Session, r *http.Request, w http.ResponseWriter) error {
-	return session.Save(r, w)
+	return m.session.SaveSession(r, w, session)
 }
 
 func (m *mockAppStore) GetServers(servers *[]models.Server) error {
