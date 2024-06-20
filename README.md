@@ -106,7 +106,3 @@ go run render.go handlers.go main.go config.go interfaces.go
 
 - Event listeners, such as for unauthorized responses, are added to handle specific scenarios dynamically.
 - These listeners enhance user experience by providing immediate feedback and actions without requiring full page reloads.
-
-### Summary
-
-This Go Templ + HTMX website template provides a robust structure for building interactive and dynamic web applications. By leveraging server-side rendering for initial page loads and HTMX for dynamic updates, the template ensures a smooth user experience while maintaining the simplicity and efficiency of server-rendered HTML. The template also includes mechanisms for handling authentication and theme switching, making it a comprehensive solution for modern web development. With built-in support for OAuth2 authentication and XORM for MySQL database integration, it offers a solid foundation for secure and scalable applications. The `AppStore` interface manages application state efficiently, providing a seamless way to handle user sessions and data retrieval within the view renderer.

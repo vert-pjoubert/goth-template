@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -52,13 +53,10 @@ func main() {
 	staticDir := "static"
 	engine := initDB(config)
 
-	keyPairsDir := config["SESSION_KEY_PAIRS_DIR"]
-	keyPairs, err := auth.LoadKeyPairsFromDir(keyPairsDir)
-	if err != nil {
-		log.Fatalf("Failed to load key pairs: %v", err)
-	}
+	authKey := os.Getenv("SESSION_AUTH_KEY")
+	encKey := os.Getenv("SESSION_ENC_KEY")
 
-	sessionManager := auth.NewCookieSessionManager(keyPairs...)
+	sessionManager, _ := auth.NewCookieSessionManager(authKey, encKey)
 	dbStore := store.NewXormDbStore(engine)
 	appStore := store.NewCachedAppStore(dbStore, sessionManager)
 

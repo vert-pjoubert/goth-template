@@ -202,7 +202,10 @@ func (a *OAuth2Authenticator) LoginHandler(w http.ResponseWriter, r *http.Reques
 
 	session, _ := a.Session.GetSession(r)
 	session.Values["state"] = state
-	a.Session.SaveSession(r, w, session)
+	if err := a.Session.SaveSession(r, w, session); err != nil {
+		http.Error(w, "Failed to save session", http.StatusInternalServerError)
+		return
+	}
 
 	url := a.Config.AuthCodeURL(state)
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
@@ -211,8 +214,9 @@ func (a *OAuth2Authenticator) LoginHandler(w http.ResponseWriter, r *http.Reques
 // CallbackHandler handles the callback from the OAuth2 provider
 func (a *OAuth2Authenticator) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	session, _ := a.Session.GetSession(r)
-	if r.URL.Query().Get("state") != session.Values["state"] {
-		http.Error(w, "state did not match", http.StatusBadRequest)
+	storedState, ok := session.Values["state"].(string)
+	if !ok || storedState != r.URL.Query().Get("state") {
+		http.Error(w, "Invalid state parameter", http.StatusBadRequest)
 		return
 	}
 
@@ -242,11 +246,21 @@ func (a *OAuth2Authenticator) CallbackHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Process claims, create session, etc.
+	storedUser, err := a.Store.GetUserWithRoleByEmail(claims.Email)
+	if err != nil {
+		http.Error(w, "Failed to retrieve user: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	session.Values["id_token"] = rawIDToken
-	session.Values["user"] = claims.Email
+	session.Values["user"] = storedUser.Email
+	session.Values["role"] = storedUser.Role.Name
 	session.Values["created_at"] = time.Now()
-	a.Session.SaveSession(r, w, session)
+
+	if err := a.Session.SaveSession(r, w, session); err != nil {
+		http.Error(w, "Failed to save session", http.StatusInternalServerError)
+		return
+	}
 
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
