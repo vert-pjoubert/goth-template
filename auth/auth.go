@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
@@ -41,6 +42,7 @@ type OAuth2Authenticator struct {
 	TokenExpiryTime       time.Duration
 	SessionExpiryDuration time.Duration
 	Ctx                   context.Context
+	LogFile               *os.File
 }
 
 // NewOAuth2Authenticator initializes a new OAuth2Authenticator
@@ -80,6 +82,12 @@ func NewOAuth2Authenticator(config map[string]string, sessionManager ISessionMan
 		return nil, err
 	}
 
+	// Initialize log file
+	logFile, err := os.OpenFile("./auth.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return nil, err
+	}
+
 	return &OAuth2Authenticator{
 		Config:                oauth2Config,
 		Verifier:              verifier,
@@ -89,19 +97,28 @@ func NewOAuth2Authenticator(config map[string]string, sessionManager ISessionMan
 		TokenExpiryTime:       time.Duration(expiryTime) * time.Second,
 		SessionExpiryDuration: time.Duration(sessionExpiry) * time.Second,
 		Ctx:                   context.Background(),
+		LogFile:               logFile,
 	}, nil
+}
+
+// logMessage logs a message to the auth.log file
+func (a *OAuth2Authenticator) logMessage(message string) {
+	log.SetOutput(a.LogFile)
+	log.Println(message)
 }
 
 // getSessionWithExpiryCheck wraps session retrieval and checks if the session is expired
 func (a *OAuth2Authenticator) getSessionWithExpiryCheck(w http.ResponseWriter, r *http.Request) (*sessions.Session, bool) {
 	session, err := a.Session.GetSession(r)
 	if err != nil {
+		a.logMessage("Session retrieval error: " + err.Error())
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return nil, false
 	}
 
 	createdAt, ok := session.Values["created_at"].(time.Time)
 	if !ok || time.Since(createdAt) > a.SessionExpiryDuration {
+		a.logMessage("Session expired")
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return nil, false
 	}
@@ -114,6 +131,7 @@ func (a *OAuth2Authenticator) refreshAccessToken(refreshToken string) (*oauth2.T
 	tokenSource := a.Config.TokenSource(a.Ctx, &oauth2.Token{RefreshToken: refreshToken})
 	newToken, err := tokenSource.Token()
 	if err != nil {
+		a.logMessage("Failed to refresh access token: " + err.Error())
 		return nil, err
 	}
 	return newToken, nil
@@ -128,6 +146,7 @@ func (a *OAuth2Authenticator) IsAuthenticated(w http.ResponseWriter, r *http.Req
 
 	idTokenStr, ok := session.Values["id_token"].(string)
 	if !ok || idTokenStr == "" {
+		a.logMessage("ID token missing in session")
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return false, nil
 	}
@@ -144,6 +163,7 @@ func (a *OAuth2Authenticator) IsAuthenticated(w http.ResponseWriter, r *http.Req
 	// Validate the ID token
 	idToken, err := a.Verifier.Verify(a.Ctx, idTokenStr)
 	if err != nil {
+		a.logMessage("ID token verification failed: " + err.Error())
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return false, err
 	}
@@ -153,6 +173,7 @@ func (a *OAuth2Authenticator) IsAuthenticated(w http.ResponseWriter, r *http.Req
 		Expiry int64 `json:"exp"`
 	}
 	if err := idToken.Claims(&claims); err != nil {
+		a.logMessage("Failed to parse ID token claims: " + err.Error())
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return false, err
 	}
@@ -161,12 +182,14 @@ func (a *OAuth2Authenticator) IsAuthenticated(w http.ResponseWriter, r *http.Req
 	if time.Unix(claims.Expiry, 0).Before(time.Now()) {
 		refreshToken, ok := session.Values["refresh_token"].(string)
 		if !ok || refreshToken == "" {
+			a.logMessage("Refresh token missing or empty in session")
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return false, nil
 		}
 
 		newToken, err := a.refreshAccessToken(refreshToken)
 		if err != nil {
+			a.logMessage("Failed to refresh access token: " + err.Error())
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return false, err
 		}
@@ -177,7 +200,7 @@ func (a *OAuth2Authenticator) IsAuthenticated(w http.ResponseWriter, r *http.Req
 		session.Values["token"] = newToken.AccessToken
 		session.Values["refresh_token"] = newToken.RefreshToken
 		if err := a.Session.SaveSession(r, w, session); err != nil {
-			log.Printf("Error saving session: %v", err)
+			a.logMessage("Error saving session: " + err.Error())
 			return false, err
 		}
 	}
@@ -196,6 +219,7 @@ func (a *OAuth2Authenticator) IsAuthenticated(w http.ResponseWriter, r *http.Req
 func (a *OAuth2Authenticator) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	state, err := generateRandomString(32)
 	if err != nil {
+		a.logMessage("Failed to generate state: " + err.Error())
 		http.Error(w, "Failed to generate state", http.StatusInternalServerError)
 		return
 	}
@@ -203,11 +227,13 @@ func (a *OAuth2Authenticator) LoginHandler(w http.ResponseWriter, r *http.Reques
 	session, _ := a.Session.GetSession(r)
 	session.Values["state"] = state
 	if err := a.Session.SaveSession(r, w, session); err != nil {
+		a.logMessage("Failed to save session: " + err.Error())
 		http.Error(w, "Failed to save session", http.StatusInternalServerError)
 		return
 	}
 
 	url := a.Config.AuthCodeURL(state)
+	a.logMessage("Redirecting to: " + url)
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
 
@@ -216,24 +242,28 @@ func (a *OAuth2Authenticator) CallbackHandler(w http.ResponseWriter, r *http.Req
 	session, _ := a.Session.GetSession(r)
 	storedState, ok := session.Values["state"].(string)
 	if !ok || storedState != r.URL.Query().Get("state") {
+		a.logMessage("Invalid state parameter")
 		http.Error(w, "Invalid state parameter", http.StatusBadRequest)
 		return
 	}
 
 	oauth2Token, err := a.Config.Exchange(a.Ctx, r.URL.Query().Get("code"))
 	if err != nil {
+		a.logMessage("Failed to exchange token: " + err.Error())
 		http.Error(w, "Failed to exchange token: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	rawIDToken, ok := oauth2Token.Extra("id_token").(string)
 	if !ok {
+		a.logMessage("No id_token field in oauth2 token")
 		http.Error(w, "No id_token field in oauth2 token", http.StatusInternalServerError)
 		return
 	}
 
 	idToken, err := a.Verifier.Verify(a.Ctx, rawIDToken)
 	if err != nil {
+		a.logMessage("Failed to verify ID Token: " + err.Error())
 		http.Error(w, "Failed to verify ID Token: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -242,12 +272,14 @@ func (a *OAuth2Authenticator) CallbackHandler(w http.ResponseWriter, r *http.Req
 		Email string `json:"email"`
 	}
 	if err := idToken.Claims(&claims); err != nil {
+		a.logMessage("Failed to parse ID Token claims: " + err.Error())
 		http.Error(w, "Failed to parse ID Token claims: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	storedUser, err := a.Store.GetUserWithRoleByEmail(claims.Email)
 	if err != nil {
+		a.logMessage("Failed to retrieve user: " + err.Error())
 		http.Error(w, "Failed to retrieve user: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -258,10 +290,12 @@ func (a *OAuth2Authenticator) CallbackHandler(w http.ResponseWriter, r *http.Req
 	session.Values["created_at"] = time.Now()
 
 	if err := a.Session.SaveSession(r, w, session); err != nil {
+		a.logMessage("Failed to save session: " + err.Error())
 		http.Error(w, "Failed to save session", http.StatusInternalServerError)
 		return
 	}
 
+	a.logMessage("Login successful, redirecting to home page")
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
@@ -269,13 +303,16 @@ func (a *OAuth2Authenticator) CallbackHandler(w http.ResponseWriter, r *http.Req
 func (a *OAuth2Authenticator) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	session, err := a.Session.GetSession(r)
 	if err != nil {
+		a.logMessage("Error getting session: " + err.Error())
 		log.Printf("Error getting session: %v", err)
 	}
 	session.Options.MaxAge = -1
 	err = a.Session.SaveSession(r, w, session)
 	if err != nil {
+		a.logMessage("Error saving session: " + err.Error())
 		log.Printf("Error saving session: %v", err)
 	}
+	a.logMessage("Logout successful, redirecting to login page")
 	http.Redirect(w, r, a.Config.Endpoint.AuthURL, http.StatusSeeOther)
 }
 
