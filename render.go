@@ -3,12 +3,14 @@ package main
 import (
 	"context"
 	"net/http"
+	"strconv"
 
 	"github.com/a-h/templ"
-
 	"github.com/vert-pjoubert/goth-template/store/models"
 	"github.com/vert-pjoubert/goth-template/templates"
 )
+
+const itemsPerPage = 10
 
 // ###################################################
 // layout renderer
@@ -54,21 +56,30 @@ func (vr *ViewRenderer) RenderView(w http.ResponseWriter, r *http.Request) {
 	}
 
 	view := r.URL.Query().Get("view")
+	pageParam := r.URL.Query().Get("page")
+	pageNumber, err := strconv.Atoi(pageParam)
+	if err != nil || pageNumber < 1 {
+		pageNumber = 1
+	}
+
 	switch view {
 	case "settings":
 		content := templates.Settings()
-		content.Render(context.Background(), w)
+		_ = content.Render(context.Background(), w)
 	case "servers":
 		servers, err := vr.getAccessibleServers(user.Role.Name)
 		if err != nil {
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			return
 		}
-		templateServers := make([]templates.Server, len(servers))
-		for i, server := range servers {
-			templateServers[i] = templates.NewServer(server)
+		startIndex := (pageNumber - 1) * itemsPerPage
+		endIndex := min(startIndex+itemsPerPage, len(servers))
+		if startIndex >= len(servers) {
+			http.Error(w, "No more data", http.StatusNoContent)
+			return
 		}
-		content := templates.ServersList(templateServers)
+		pageServers := servers[startIndex:endIndex]
+		content := templates.ServersInfiniteScroll(pageNumber, pageServers)
 		content.Render(context.Background(), w)
 	case "events":
 		events, err := vr.getAccessibleEvents(user.Role.Name)
@@ -76,11 +87,14 @@ func (vr *ViewRenderer) RenderView(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			return
 		}
-		templateEvents := make([]templates.Event, len(events))
-		for i, event := range events {
-			templateEvents[i] = templates.NewEvent(event)
+		startIndex := (pageNumber - 1) * itemsPerPage
+		endIndex := min(startIndex+itemsPerPage, len(events))
+		if startIndex >= len(events) {
+			http.Error(w, "No more data", http.StatusNoContent)
+			return
 		}
-		content := templates.EventsList(templateEvents)
+		pageEvents := events[startIndex:endIndex]
+		content := templates.EventsInfiniteScroll(pageNumber, pageEvents)
 		content.Render(context.Background(), w)
 	default:
 		http.Error(w, "Invalid view", http.StatusBadRequest)
@@ -126,4 +140,11 @@ func contains(s []string, e string) bool {
 		}
 	}
 	return false
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
