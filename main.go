@@ -9,6 +9,7 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/jmoiron/sqlx"
 	"github.com/vert-pjoubert/goth-template/auth"
 	"github.com/vert-pjoubert/goth-template/store"
 	"github.com/vert-pjoubert/goth-template/store/models"
@@ -22,7 +23,67 @@ func init() {
 	gob.Register(time.Time{})
 }
 
-func initDB(config map[string]string) *xorm.Engine {
+func initDB(config map[string]string) store.DbStore {
+	dbType := config["DB_TYPE"]
+
+	switch dbType {
+	case "sqlx":
+		return initSqlxDB(config)
+	case "xorm":
+		return initXormDB(config)
+	default:
+		log.Fatalf("Unknown DB_TYPE: %s", dbType)
+		return nil
+	}
+}
+
+func initSqlxDB(config map[string]string) *store.SqlxDbStore {
+	dbUser := config["DB_USER"]
+	dbPassword := config["DB_PASSWORD"]
+	dbHost := config["DB_HOST"]
+	dbPort := config["DB_PORT"]
+	dbName := config["DB_NAME"]
+
+	dataSourceName := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
+		dbUser, dbPassword, dbHost, dbPort, dbName)
+
+	db, err := sqlx.Open("postgres", dataSourceName)
+	if err != nil {
+		log.Fatalf("Failed to create sqlx.DB: %v", err)
+	}
+
+	// Ensure the database schema is in sync with the models
+	err = db.Ping()
+	if err != nil {
+		log.Fatalf("Failed to ping database: %v", err)
+	}
+
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS users (
+		id SERIAL PRIMARY KEY,
+		email TEXT UNIQUE NOT NULL,
+		name TEXT NOT NULL,
+		role_id INT,
+		created_at TIMESTAMPTZ DEFAULT NOW(),
+		updated_at TIMESTAMPTZ DEFAULT NOW()
+	)`)
+	if err != nil {
+		log.Fatalf("Failed to create users table: %v", err)
+	}
+
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS roles (
+		id SERIAL PRIMARY KEY,
+		name TEXT UNIQUE NOT NULL,
+		description TEXT,
+		permissions JSONB
+	)`)
+	if err != nil {
+		log.Fatalf("Failed to create roles table: %v", err)
+	}
+
+	return store.NewSqlxDbStore(db)
+}
+
+func initXormDB(config map[string]string) *store.XormDbStore {
 	dbUser := config["DB_USER"]
 	dbPassword := config["DB_PASSWORD"]
 	dbHost := config["DB_HOST"]
@@ -42,7 +103,7 @@ func initDB(config map[string]string) *xorm.Engine {
 		log.Fatalf("Failed to sync database schema: %v", err)
 	}
 
-	return engine
+	return store.NewXormDbStore(engine)
 }
 
 func main() {
@@ -51,13 +112,13 @@ func main() {
 		log.Fatalf("Failed to load environment config: %v", err)
 	}
 	staticDir := "static"
-	engine := initDB(config)
+	dbStore := initDB(config)
 
 	authKey := os.Getenv("SESSION_AUTH_KEY")
 	encKey := os.Getenv("SESSION_ENC_KEY")
 
 	sessionManager, _ := auth.NewCookieSessionManager(authKey, encKey)
-	dbStore := store.NewXormDbStore(engine)
+
 	appStore := store.NewCachedAppStore(dbStore, sessionManager)
 
 	authenticator, err := auth.NewOAuth2Authenticator(config, sessionManager, appStore)
