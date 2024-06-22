@@ -30,13 +30,13 @@ func TestLayout(header, footer, sidebar, content templ.Component, theme string) 
 		var templ_7745c5c3_Var2 string
 		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs("/static/styles-" + theme + ".css")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `templates/test_layout.templ`, Line: 9, Col: 71}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `test_layout.templ`, Line: 9, Col: 71}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("\"><script src=\"https://unpkg.com/htmx.org@1.5.0\"></script><script>\n            document.body.addEventListener('htmx:responseError', function(event) {\n                if (event.detail.xhr.status === 401) {\n                    window.location.href = '/login';\n                }\n            });\n        </script></head><body><div id=\"layout\"><div id=\"header\">")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("\"><script src=\"https://unpkg.com/htmx.org@1.5.0\"></script><script>\r\n            document.body.addEventListener('htmx:responseError', function(event) {\r\n                if (event.detail.xhr.status === 401) {\r\n                    window.location.href = '/login';\r\n                }\r\n            });\r\n        </script></head><body><div id=\"layout\"><div id=\"header\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
