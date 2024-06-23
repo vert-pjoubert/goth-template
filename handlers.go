@@ -71,27 +71,6 @@ func (h *Handlers) ChangeThemeHandler(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 }
 
-func (h *Handlers) ViewHandler(w http.ResponseWriter, r *http.Request) {
-	authenticated, err := h.Auth.IsAuthenticated(w, r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
-		return
-	}
-	if !authenticated {
-		http.Redirect(w, r, "/login", http.StatusFound)
-		return
-	}
-
-	session, _ := h.Session.GetSession(r)
-	token, ok := session.Values["token"].(string)
-	if !ok || token == "" {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	h.ViewRenderer.RenderView(w, r)
-}
-
 func secureFileServer(root http.FileSystem) http.Handler {
 	allowedExtensions := map[string]bool{
 		".css":  true,

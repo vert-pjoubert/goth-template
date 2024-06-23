@@ -4,9 +4,9 @@ This documentation provides an overview of the architecture and functionalities 
 
 #### 1. **Overview**
 
-The website template leverages Go Templ for server-side rendering of HTML templates and HTMX for enhancing the user experience with AJAX capabilities. This combination allows for dynamic and interactive web pages while maintaining a clean and efficient server-side rendering process. Additionally, it supports OAuth2 authentication and integrates XORM for database interactions with MySQL.
+The website template leverages Go Templ for server-side rendering of HTML templates and HTMX for enhancing the user experience with AJAX capabilities. This combination allows for dynamic and interactive web pages while maintaining a clean and efficient server-side rendering process. Additionally, it supports OAuth2 authentication and integrates both XORM and SQLX for database interactions with MySQL and PostgreSQL.
 
-```starting the server
+```shell
 go run render.go handlers.go main.go config.go interfaces.go
 ```
 
@@ -48,12 +48,13 @@ go run render.go handlers.go main.go config.go interfaces.go
 - The `IsAuthenticated` function checks if a valid session cookie is present.
 - If not authenticated, certain routes respond with a `401 Unauthorized` status.
 
-#### 4. **Database Integration with XORM**
+#### 4. **Database Integration**
 
 **DbStore Interface**
 
 - The `DbStore` interface provides basic CRUD operations for interacting with the database.
 - The `XormDbStore` implementation uses XORM to manage database interactions.
+- The `SQLXDbStore` implementation uses SQLX to manage database interactions.
 
 **AppStore Interface**
 
