@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"crypto/rand"
 	"encoding/gob"
 	"encoding/hex"
@@ -15,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/a-h/templ"
 	"github.com/gorilla/sessions"
 	"github.com/vert-pjoubert/goth-template/auth"
 	"github.com/vert-pjoubert/goth-template/mockoauth2"
@@ -37,30 +35,35 @@ func GenerateRandomHex(n int) (string, error) {
 }
 
 func TestPageRenderPipeline(t *testing.T) {
+	// Open the log file for recording test logs
 	logFile, err := os.OpenFile("./test/dump/test.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		t.Fatalf("Failed to open log file: %v", err)
 	}
 	defer logFile.Close()
 
+	// Set up logging to the log file
 	log.SetOutput(logFile)
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
 	log.Println("Starting TestPageRenderPipeline")
 
+	// Mock OAuth2 provider
 	mockProvider := mockoauth2.NewMockOAuth2Provider()
 	defer mockProvider.Server.Close()
 
-	authKey, err := GenerateRandomHex(16) // Generate 32 characters hex string (16 bytes)
+	// Generate random authentication and encryption keys for session management
+	authKey, err := GenerateRandomHex(16)
 	if err != nil {
 		t.Fatalf("Failed to generate authKey: %v", err)
 	}
 
-	encKey, err := GenerateRandomHex(16) // Generate 32 characters hex string (16 bytes)
+	encKey, err := GenerateRandomHex(16)
 	if err != nil {
 		t.Fatalf("Failed to generate encKey: %v", err)
 	}
 
+	// Configuration for the OAuth2 authenticator
 	config := map[string]string{
 		"OAUTH2_CLIENT_ID":              "mockclientid",
 		"OAUTH2_CLIENT_SECRET":          "mockclientsecret",
@@ -72,53 +75,68 @@ func TestPageRenderPipeline(t *testing.T) {
 		"SESSION_ENC_KEY":               encKey,
 	}
 
+	// Initialize the session manager
 	sessionManager, err := auth.NewCookieSessionManager(config["SESSION_AUTH_KEY"], config["SESSION_ENC_KEY"])
 	if err != nil {
 		log.Fatalf("Failed to initialize session manager: %v", err)
 	}
 
+	// Create a mock app store and OAuth2 authenticator
 	appStore := &mockAppStore{session: sessionManager}
 	authenticator, err := auth.NewOAuth2Authenticator(config, sessionManager, appStore)
 	if err != nil {
 		log.Fatalf("Failed to create OAuth2Authenticator: %v", err)
 	}
 
+	// Initialize the view renderer and handlers
 	viewRenderer := NewViewRenderer(appStore)
 	h := NewHandlers(authenticator, NewTemplRenderer(), viewRenderer, sessionManager)
 
+	// Register views
+	viewRenderer.RegisterView("settings", h.SettingsViewHandler, []string{"admin", "user"}, []string{"read"})
+	viewRenderer.RegisterView("servers", h.ServersViewHandler, []string{"admin"}, []string{"read"})
+	viewRenderer.RegisterView("events", h.EventsViewHandler, []string{"admin", "user"}, []string{"read"})
+	viewRenderer.RegisterView("protected", h.ProtectedViewHandler, []string{"admin"}, []string{"admin_only"})
+
+	// Define test cases
 	testCases := []struct {
-		name   string
-		url    string
-		layout bool
+		name             string
+		url              string
+		layout           bool
+		expectedHTTPCode int
 	}{
-		{"HomePage", "/", true},
-		{"SettingsPage", "/view?view=settings", true},
-		{"ServersPage", "/view?view=servers", true},
-		{"EventsPage", "/view?view=events", true},
+		{"HomePage", "/", true, http.StatusOK},
+		{"SettingsPage", "/view?view=settings", true, http.StatusOK},
+		{"ServersPage", "/view?view=servers", true, http.StatusOK},
+		{"EventsPage", "/view?view=events", true, http.StatusOK},
+		{"ProtectedPage", "/view?view=protected", true, http.StatusForbidden},
 	}
 
+	// Create the dump directory for storing test outputs
 	dumpDir := "./test/dump"
 	err = os.MkdirAll(dumpDir, 0755)
 	if err != nil {
 		t.Fatalf("Failed to create dump directory: %v", err)
 	}
 
+	// Iterate over test cases
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			log.Printf("Running test case: %s", tc.name)
 
-			// Simulate login
+			// Step 1: Simulate login
 			loginReq := httptest.NewRequest("GET", "/login", nil)
 			loginResp := httptest.NewRecorder()
 			h.LoginHandler(loginResp, loginReq)
 
 			log.Printf("Simulated login for test case: %s", tc.name)
 
-			// Transfer cookies to the next request
+			// Transfer cookies from the login response to the next request
 			for _, cookie := range loginResp.Result().Cookies() {
 				loginReq.AddCookie(cookie)
 			}
 
+			// Retrieve the session and state value
 			session, _ := sessionManager.GetSession(loginReq)
 			state, ok := session.Values["state"].(string)
 			if !ok {
@@ -127,6 +145,7 @@ func TestPageRenderPipeline(t *testing.T) {
 
 			log.Printf("State in session for test case %s: %s", tc.name, state)
 
+			// Step 2: Simulate OAuth2 callback
 			callbackReq := httptest.NewRequest("GET", fmt.Sprintf("/oauth2/callback?code=mockcode&state=%s", state), nil)
 			for _, cookie := range loginResp.Result().Cookies() {
 				callbackReq.AddCookie(cookie)
@@ -145,62 +164,69 @@ func TestPageRenderPipeline(t *testing.T) {
 				t.Fatalf("user not found in session for test case: %s", tc.name)
 			}
 
-			// Transfer cookies to the next request
+			// Transfer cookies from the callback response to the next request
 			req := httptest.NewRequest("GET", tc.url, nil)
 			for _, cookie := range callbackResp.Result().Cookies() {
 				req.AddCookie(cookie)
 			}
 			w := httptest.NewRecorder()
 
-			switch tc.url {
-			case "/":
-				h.IndexHandler(w, req)
-			default:
-				authMiddleware(authenticator, func(w http.ResponseWriter, r *http.Request) {
-					var content templ.Component
+			// Render the appropriate content based on the URL
+			authMiddleware(authenticator, func(w http.ResponseWriter, r *http.Request) {
+				// Retrieve user from the request
+				session, err := sessionManager.GetSession(r)
+				if err != nil {
+					http.Error(w, "Forbidden", http.StatusForbidden)
+					return
+				}
+				userEmail, ok := session.Values["user"].(string)
+				if !ok {
+					http.Error(w, "Forbidden", http.StatusForbidden)
+					return
+				}
 
-					switch tc.url {
-					case "/view?view=settings":
-						content = templates.Settings()
-					case "/view?view=servers":
-						servers, err := viewRenderer.getAccessibleServers("admin")
-						if err != nil {
-							http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-							return
-						}
-						templateServers := make([]templates.Server, len(servers))
-						for i, server := range servers {
-							templateServers[i] = templates.NewServer(server)
-						}
-						content = templates.ServersList(templateServers)
-					case "/view?view=events":
-						events, err := viewRenderer.getAccessibleEvents("admin")
-						if err != nil {
-							http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-							return
-						}
-						templateEvents := make([]templates.Event, len(events))
-						for i, event := range events {
-							templateEvents[i] = templates.NewEvent(event)
-						}
-						content = templates.EventsList(templateEvents)
+				user, err := appStore.GetUserWithRoleByEmail(userEmail)
+				if err != nil {
+					http.Error(w, "Forbidden", http.StatusForbidden)
+					return
+				}
+
+				// Handle specific views and render full layout for tests
+				switch tc.url {
+				case "/":
+					h.Renderer.RenderWithLayout(w, templates.Home(), r)
+				case "/view?view=settings":
+					h.Renderer.RenderWithLayout(w, templates.Settings(), r)
+				case "/view?view=servers":
+					servers, err := h.ViewRenderer.getAccessibleServers(user.Role.Name)
+					if err != nil {
+						http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+						return
 					}
-
-					if tc.layout {
-						testLayout := templates.TestLayout(
-							templates.Header(),
-							templates.Footer(),
-							templates.Sidebar(),
-							content,
-							"light",
-						)
-						testLayout.Render(context.Background(), w)
-					} else {
-						content.Render(context.Background(), w)
+					templateServers := make([]templates.Server, len(servers))
+					for i, server := range servers {
+						templateServers[i] = templates.NewServer(server)
 					}
-				})(w, req)
-			}
+					h.Renderer.RenderWithLayout(w, templates.ServersList(templateServers), r)
+				case "/view?view=events":
+					events, err := h.ViewRenderer.getAccessibleEvents(user.Role.Name)
+					if err != nil {
+						http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+						return
+					}
+					templateEvents := make([]templates.Event, len(events))
+					for i, event := range events {
+						templateEvents[i] = templates.NewEvent(event)
+					}
+					h.Renderer.RenderWithLayout(w, templates.EventsList(templateEvents), r)
+				case "/view?view=protected":
+					h.ProtectedViewHandler(w, r, user)
+				default:
+					http.Error(w, "Not Found", http.StatusNotFound)
+				}
+			})(w, req)
 
+			// Get the response and read the body
 			res := w.Result()
 			defer res.Body.Close()
 
@@ -209,6 +235,12 @@ func TestPageRenderPipeline(t *testing.T) {
 				t.Fatalf("Failed to read response body for %s: %v", tc.name, err)
 			}
 
+			// Check HTTP status code
+			if res.StatusCode != tc.expectedHTTPCode {
+				t.Fatalf("unexpected status code for %s: got %v want %v", tc.name, res.StatusCode, tc.expectedHTTPCode)
+			}
+
+			// Write the response body to a file for review
 			dumpPath := filepath.Join(dumpDir, tc.name+".html")
 			err = os.WriteFile(dumpPath, output, 0644)
 			if err != nil {
@@ -255,14 +287,14 @@ func (m *mockAppStore) GetServers(servers *[]models.Server) error {
 			Name:  "Server 1",
 			Type:  "video",
 			URL:   "http://server1.example.com",
-			Roles: []string{"admin", "user"},
+			Roles: "admin;user",
 		},
 		{
 			ID:    2,
 			Name:  "Server 2",
 			Type:  "map",
 			URL:   "http://server2.example.com",
-			Roles: []string{"admin", "operator_group_16"},
+			Roles: "admin;operator_group_16",
 		},
 	}
 	return nil
@@ -281,7 +313,7 @@ func (m *mockAppStore) GetEvents(events *[]models.Event) error {
 			Severity:      "high",
 			SeverityClass: "critical",
 			Description:   "Motion detected",
-			Roles:         []string{"admin", "user"},
+			Roles:         "admin;user;operator_group_16",
 		},
 		{
 			ID:            2,
@@ -294,8 +326,38 @@ func (m *mockAppStore) GetEvents(events *[]models.Event) error {
 			Severity:      "low",
 			SeverityClass: "warning",
 			Description:   "Temperature threshold exceeded",
-			Roles:         []string{"admin", "operator_group_16"},
+			Roles:         "admin;user;operator_group_16",
 		},
 	}
 	return nil
+}
+
+func (m *mockAppStore) GetRoleByName(name string) (*models.Role, error) {
+	// Mock roles
+	roles := map[string]*models.Role{
+		"admin": {
+			ID:          1,
+			Name:        "admin",
+			Description: "Administrator with full access",
+			Permissions: "create;read;update;delete",
+		},
+		"user": {
+			ID:          2,
+			Name:        "user",
+			Description: "Regular user with limited access",
+			Permissions: "read",
+		},
+		"operator_group_16": {
+			ID:          3,
+			Name:        "operator_group_16",
+			Description: "Operator group with specific access",
+			Permissions: "read;update",
+		},
+	}
+
+	if role, exists := roles[name]; exists {
+		return role, nil
+	}
+
+	return nil, fmt.Errorf("role not found: %s", name)
 }

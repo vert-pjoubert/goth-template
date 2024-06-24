@@ -175,3 +175,10 @@ func (s *SqlxDbStore) GetEventsByRole(role string) ([]models.Event, error) {
 	err := FilterBy(s.db, "events", "role", role, &events)
 	return events, err
 }
+
+// GetRoleByName retrieves a role by name
+func (s *SqlxDbStore) GetRoleByName(name string) (*models.Role, error) {
+	role := new(models.Role)
+	err := GetTableByFilter(s.db, "roles", "name", name, role)
+	return role, err
+}

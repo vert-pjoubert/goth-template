@@ -74,6 +74,14 @@ func (s *XormDbStore) GetRoleByID(id int64) (*models.Role, error) {
 	return role, nil
 }
 
+func (s *XormDbStore) GetRoleByName(name string) (*models.Role, error) {
+	role := new(models.Role)
+	has, err := XormGetTableByFilter(s.engine, "roles", "name", name, role)
+	if err != nil || !has {
+		return nil, err
+	}
+	return role, nil
+}
 func (s *XormDbStore) UpdateRole(role *models.Role) error {
 	_, err := s.engine.ID(role.ID).Update(role)
 	return err
