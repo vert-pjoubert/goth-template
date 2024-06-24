@@ -21,6 +21,7 @@ func init() {
 		log.Fatal("Error loading .env file: ", err)
 	}
 	gob.Register(time.Time{})
+
 }
 
 func initDB(config map[string]string) store.DbStore {
@@ -107,37 +108,51 @@ func initXormDB(config map[string]string) *store.XormDbStore {
 }
 
 func main() {
+	// Load configuration
 	config, err := LoadEnvConfig(".env")
 	if err != nil {
 		log.Fatalf("Failed to load environment config: %v", err)
 	}
-	staticDir := "static"
+
+	// Initialize database
 	dbStore := initDB(config)
 
+	// Initialize session manager
 	authKey := os.Getenv("SESSION_AUTH_KEY")
 	encKey := os.Getenv("SESSION_ENC_KEY")
-
 	sessionManager, _ := auth.NewCookieSessionManager(authKey, encKey)
 
+	// Create cached app store
 	appStore := store.NewCachedAppStore(dbStore, sessionManager)
 
+	// Initialize OAuth2 authenticator
 	authenticator, err := auth.NewOAuth2Authenticator(config, sessionManager, appStore)
 	if err != nil {
 		log.Fatalf("Failed to create OAuth2Authenticator: %v", err)
 	}
+
+	// Initialize renderers
 	renderer := NewTemplRenderer()
 	viewRenderer := NewViewRenderer(appStore)
-	h := NewHandlers(authenticator, renderer, viewRenderer, sessionManager)
 
-	http.Handle("/static/", http.StripPrefix("/static/", secureFileServer(http.Dir(staticDir))))
+	// Register views
+	h := NewHandlers(authenticator, renderer, viewRenderer, sessionManager)
+	viewRenderer.RegisterView("settings", h.SettingsViewHandler, []string{"admin", "user"}, []string{"read"})
+	viewRenderer.RegisterView("servers", h.ServersViewHandler, []string{"admin"}, []string{"read"})
+	viewRenderer.RegisterView("events", h.EventsViewHandler, []string{"admin", "user"}, []string{"read"})
+	viewRenderer.RegisterView("protected", h.ProtectedViewHandler, []string{"admin"}, []string{"admin_only"})
+
+	// Set up HTTP routes
+	http.Handle("/static/", http.StripPrefix("/static/", secureFileServer(http.Dir("static"))))
 	http.HandleFunc("/", h.IndexHandler)
 	http.HandleFunc("/view", authMiddleware(authenticator, viewRenderer.RenderView))
 	http.HandleFunc("/layout", h.LayoutHandler)
 	http.HandleFunc("/change-theme", h.ChangeThemeHandler)
-	http.HandleFunc("/login", authenticator.LoginHandler)
+	http.HandleFunc("/login", h.LoginHandler)
 	http.HandleFunc("/logout", authenticator.LogoutHandler)
 	http.HandleFunc("/oauth2/callback", authenticator.CallbackHandler)
 
+	// Start HTTP server
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 

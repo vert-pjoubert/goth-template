@@ -58,6 +58,10 @@ func (s *CachedAppStore) CreateUserWithRole(user *models.User, role *models.Role
 	return nil
 }
 
+func (s *CachedAppStore) GetRoleByName(name string) (*models.Role, error) {
+	return s.dbStore.GetRoleByName(name)
+}
+
 func (s *CachedAppStore) GetSession(r *http.Request) (*sessions.Session, error) {
 	return s.session.GetSession(r)
 }

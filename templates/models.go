@@ -10,7 +10,7 @@ type Server struct {
 	ServerID string
 	Name     string
 	Type     string
-	Roles    []string
+	Roles    string
 }
 
 func NewServer(server models.Server) Server {
@@ -33,7 +33,7 @@ type Event struct {
 	Severity      string
 	SeverityClass string
 	Description   string
-	Roles         []string
+	Roles         string
 }
 
 func NewEvent(event models.Event) Event {

@@ -22,6 +22,7 @@ type IAuthenticator interface {
 	CallbackHandler(http.ResponseWriter, *http.Request)
 	LogoutHandler(http.ResponseWriter, *http.Request)
 	IsAuthenticated(w http.ResponseWriter, r *http.Request) (bool, error)
+	HasPermission(userRole string, requiredPermission string) (bool, error)
 }
 
 // TokenCacheEntry represents an entry in the token cache
@@ -31,6 +32,7 @@ type TokenCacheEntry struct {
 	AccessToken string
 }
 
+// Update IAppStore interface to include GetRoleByName
 type IAppStore interface {
 	GetUserWithRoleByEmail(email string) (*models.User, error)
 	CreateUserWithRole(user *models.User, role *models.Role) error
@@ -38,6 +40,7 @@ type IAppStore interface {
 	SaveSession(session *sessions.Session, r *http.Request, w http.ResponseWriter) error
 	GetServers(servers *[]models.Server) error
 	GetEvents(events *[]models.Event) error
+	GetRoleByName(name string) (*models.Role, error) // New method
 }
 
 // OAuth2Authenticator implements the IAuthenticator interface using OAuth2 and OpenID Connect
@@ -221,6 +224,21 @@ func (a *OAuth2Authenticator) IsAuthenticated(w http.ResponseWriter, r *http.Req
 	})
 
 	return true, nil
+}
+
+func (a *OAuth2Authenticator) HasPermission(userRole string, requiredPermission string) (bool, error) {
+	role, err := a.Store.GetRoleByName(userRole)
+	if err != nil {
+		a.logMessage("Failed to retrieve role: " + err.Error())
+		return false, err
+	}
+
+	permissions := ConvertStringToPermissions(role.Permissions)
+	if HasPermission(permissions, requiredPermission) {
+		return true, nil
+	}
+
+	return false, nil
 }
 
 // LoginHandler handles the login process

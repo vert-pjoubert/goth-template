@@ -7,12 +7,13 @@ import (
 	"github.com/vert-pjoubert/goth-template/store/models"
 )
 
-// IAuthenticator interface
+// IAuthenticator interface, Do not alter. Main HARD depends on this interface.
 type IAuthenticator interface {
 	LoginHandler(http.ResponseWriter, *http.Request)
 	CallbackHandler(http.ResponseWriter, *http.Request)
 	LogoutHandler(http.ResponseWriter, *http.Request)
 	IsAuthenticated(w http.ResponseWriter, r *http.Request) (bool, error)
+	HasPermission(userRole string, requiredPermission string) (bool, error)
 }
 
 type DbStore interface {
@@ -28,11 +29,18 @@ type DbStore interface {
 	GetEvents(events *[]models.Event) error
 }
 
-type AppStore interface {
+// Update IAppStore interface to include GetRoleByName
+type IAppStore interface {
 	GetUserWithRoleByEmail(email string) (*models.User, error)
 	CreateUserWithRole(user *models.User, role *models.Role) error
 	GetSession(r *http.Request) (*sessions.Session, error)
 	SaveSession(session *sessions.Session, r *http.Request, w http.ResponseWriter) error
 	GetServers(servers *[]models.Server) error
 	GetEvents(events *[]models.Event) error
+	GetRoleByName(name string) (*models.Role, error) // New method
+}
+
+type ISessionManager interface {
+	GetSession(r *http.Request) (*sessions.Session, error)
+	SaveSession(r *http.Request, w http.ResponseWriter, session *sessions.Session) error
 }

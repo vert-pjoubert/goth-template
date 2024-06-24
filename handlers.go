@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/vert-pjoubert/goth-template/auth"
+	"github.com/vert-pjoubert/goth-template/store/models"
 	"github.com/vert-pjoubert/goth-template/templates"
 )
 
@@ -14,12 +16,16 @@ type Handlers struct {
 	Auth         IAuthenticator
 	Renderer     *TemplRenderer
 	ViewRenderer *ViewRenderer
-	Session      auth.ISessionManager
+	Session      ISessionManager
+	baseURL      string
 }
 
-// NewHandlers initializes the Handlers struct
-func NewHandlers(auth IAuthenticator, renderer *TemplRenderer, viewRenderer *ViewRenderer, session auth.ISessionManager) *Handlers {
-	return &Handlers{Auth: auth, Renderer: renderer, ViewRenderer: viewRenderer, Session: session}
+func NewHandlers(auth IAuthenticator, renderer *TemplRenderer, viewRenderer *ViewRenderer, session ISessionManager) *Handlers {
+	baseURL := os.Getenv("BASE_URL")
+	if baseURL == "" {
+		baseURL = "http://localhost:8080"
+	}
+	return &Handlers{Auth: auth, Renderer: renderer, ViewRenderer: viewRenderer, Session: session, baseURL: baseURL}
 }
 
 func (h *Handlers) IndexHandler(w http.ResponseWriter, r *http.Request) {
@@ -71,6 +77,23 @@ func (h *Handlers) ChangeThemeHandler(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 }
 
+func (h *Handlers) SettingsViewHandler(w http.ResponseWriter, r *http.Request, user *models.User) {
+	content := templates.Settings()
+	content.Render(context.Background(), w)
+}
+
+func (h *Handlers) ServersViewHandler(w http.ResponseWriter, r *http.Request, user *models.User) {
+	h.ViewRenderer.RenderAccessibleServers(w, r, user)
+}
+
+func (h *Handlers) EventsViewHandler(w http.ResponseWriter, r *http.Request, user *models.User) {
+	h.ViewRenderer.RenderAccessibleEvents(w, r, user)
+}
+
+func (h *Handlers) ProtectedViewHandler(w http.ResponseWriter, r *http.Request, user *models.User) {
+	http.Error(w, "Forbidden", http.StatusForbidden)
+}
+
 func secureFileServer(root http.FileSystem) http.Handler {
 	allowedExtensions := map[string]bool{
 		".css":  true,
@@ -109,13 +132,4 @@ func secureFileServer(root http.FileSystem) http.Handler {
 		// Serve the file if it exists
 		http.FileServer(root).ServeHTTP(w, r)
 	})
-}
-
-// Helper functions
-func getTheme(r *http.Request) string {
-	cookie, err := r.Cookie("theme")
-	if err != nil {
-		return "light" // default theme
-	}
-	return cookie.Value
 }
