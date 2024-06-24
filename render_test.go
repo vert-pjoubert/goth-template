@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/a-h/templ"
-	"github.com/vert-pjoubert/goth-template/store/models"
 	"github.com/vert-pjoubert/goth-template/templates"
 )
 
@@ -18,14 +17,12 @@ func TestRenderWithLayout(t *testing.T) {
 	renderer := NewTemplRenderer()
 	appStore := &mockAppStore{}
 
-	// Get data from mockAppStore
-	var servers []models.Server
-	var events []models.Event
-	err := appStore.GetServers(&servers)
+	servers, err := appStore.GetServers()
 	if err != nil {
 		t.Fatalf("Failed to get servers: %v", err)
 	}
-	err = appStore.GetEvents(&events)
+
+	events, err := appStore.GetEvents()
 	if err != nil {
 		t.Fatalf("Failed to get events: %v", err)
 	}

@@ -1,6 +1,10 @@
 package auth
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/vert-pjoubert/goth-template/store/models"
+)
 
 // ConvertPermissionsToString converts a slice of permissions to a semicolon-separated string
 func ConvertPermissionsToString(permissions []string) string {
@@ -24,4 +28,52 @@ func HasPermission(permissions []string, requiredPermission string) bool {
 		}
 	}
 	return false
+}
+
+func HasRequiredRoles(user *models.User, requiredRoles []string) bool {
+	if len(requiredRoles) == 0 {
+		return true
+	}
+
+	userRole := user.Role.Name
+	for _, role := range requiredRoles {
+		if role == userRole {
+			return true
+		}
+	}
+
+	return false
+}
+
+func HasRequiredPermissions(user *models.User, requiredPermissions []string) bool {
+	if len(requiredPermissions) == 0 {
+		return true
+	}
+
+	userPermissions := ConvertStringToPermissions(user.Role.Permissions)
+	for _, perm := range requiredPermissions {
+		if !contains(userPermissions, perm) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// contains checks if a slice contains a specific string
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
+}
+
+// ConvertStringToRoles converts a semicolon-separated string to a slice of roles
+func ConvertStringToRoles(rolesString string) []string {
+	if rolesString == "" {
+		return []string{}
+	}
+	return strings.Split(rolesString, ";")
 }

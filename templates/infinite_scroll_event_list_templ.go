@@ -10,7 +10,7 @@ import "context"
 import "io"
 import "bytes"
 
-func EventsInfiniteScroll(nextPage string, events []Event) templ.Component {
+func EventsInfiniteScroll(nextpage string, events []Event) templ.Component {
 	return templ.ComponentFunc(func(ctx context.Context, templ_7745c5c3_W io.Writer) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templ_7745c5c3_W.(*bytes.Buffer)
 		if !templ_7745c5c3_IsBuffer {
@@ -23,24 +23,33 @@ func EventsInfiniteScroll(nextPage string, events []Event) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<div id=\"events-list\" class=\"events-container\"><ul>")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<div id=\"events-list\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		for _, event := range events {
-			templ_7745c5c3_Err = EventCard(event.ThumbnailURL, event.Source, event.Time, event.Severity, event.SeverityClass, event.Description, event.EventID, event.EventType).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = EventCard(
+				event.ThumbnailURL,
+				event.Source,
+				event.Time,
+				event.Severity,
+				event.SeverityClass,
+				event.Description,
+				event.EventID,
+				event.EventType,
+			).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("</ul><div hx-get=\"")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<div hx-get=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var2 string
-		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs("/view?view=events&page=" + nextPage)
+		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs("/view?view=servers&page=" + nextpage)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `infinite_scroll_event_list.templ`, Line: 10, Col: 51}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `infinite_scroll_event_list.templ`, Line: 17, Col: 58}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 		if templ_7745c5c3_Err != nil {

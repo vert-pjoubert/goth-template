@@ -83,15 +83,11 @@ func (h *Handlers) SettingsViewHandler(w http.ResponseWriter, r *http.Request, u
 }
 
 func (h *Handlers) ServersViewHandler(w http.ResponseWriter, r *http.Request, user *models.User) {
-	h.ViewRenderer.RenderAccessibleServers(w, r, user)
+	h.ViewRenderer.ServersViewRender(w, r, user)
 }
 
 func (h *Handlers) EventsViewHandler(w http.ResponseWriter, r *http.Request, user *models.User) {
-	h.ViewRenderer.RenderAccessibleEvents(w, r, user)
-}
-
-func (h *Handlers) ProtectedViewHandler(w http.ResponseWriter, r *http.Request, user *models.User) {
-	http.Error(w, "Forbidden", http.StatusForbidden)
+	h.ViewRenderer.EventsViewRender(w, r, user)
 }
 
 func secureFileServer(root http.FileSystem) http.Handler {

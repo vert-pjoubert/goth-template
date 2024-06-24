@@ -36,7 +36,7 @@ func Layout(content templ.Component, theme string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("\"><script src=\"https://unpkg.com/htmx.org@1.5.0\"></script><script>\r\n            document.body.addEventListener('htmx:responseError', function(event) {\r\n                if (event.detail.xhr.status === 401) {\r\n                    window.location.href = '/login';\r\n                }\r\n            });\r\n        </script></head><body><div id=\"layout\"><div id=\"header\" hx-get=\"/layout?part=header\" hx-trigger=\"load\" hx-swap=\"innerHTML\">Loading header...</div><div class=\"container\"><div class=\"sidebar\" hx-get=\"/layout?part=sidebar\" hx-trigger=\"load\" hx-swap=\"innerHTML\">Loading sidebar...</div><div id=\"content\">")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("\"><script src=\"https://unpkg.com/htmx.org@1.5.0\"></script><script>\r\n            document.body.addEventListener('htmx:responseError', function(event) {\r\n                if (event.detail.xhr.status === 401) {\r\n                    window.location.href = '/login';\r\n                }\r\n            });\r\n        </script></head><body><div id=\"layout\"><div id=\"header\" hx-get=\"/layout?part=header\" hx-trigger=\"load\" hx-swap=\"innerHTML\">Loading header...</div><div class=\"container\"><div class=\"sidebar\" hx-get=\"/layout?part=sidebar\" hx-trigger=\"load\" hx-swap=\"innerHTML\">Loading sidebar...</div><div id=\"content-viewer\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

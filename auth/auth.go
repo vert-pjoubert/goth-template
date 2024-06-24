@@ -38,8 +38,8 @@ type IAppStore interface {
 	CreateUserWithRole(user *models.User, role *models.Role) error
 	GetSession(r *http.Request) (*sessions.Session, error)
 	SaveSession(session *sessions.Session, r *http.Request, w http.ResponseWriter) error
-	GetServers(servers *[]models.Server) error
-	GetEvents(events *[]models.Event) error
+	GetServers() ([]models.Server, error)
+	GetEvents() ([]models.Event, error)
 	GetRoleByName(name string) (*models.Role, error) // New method
 }
 

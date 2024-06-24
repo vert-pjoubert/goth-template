@@ -9,21 +9,21 @@ import (
 )
 
 type CachedAppStore struct {
-	dbStore DbStore
-	cache   map[string]*models.User
-	session auth.ISessionManager
+	dbStore   DbStore
+	usercahce map[string]*models.User
+	session   auth.ISessionManager
 }
 
 func NewCachedAppStore(dbStore DbStore, session auth.ISessionManager) *CachedAppStore {
 	return &CachedAppStore{
-		dbStore: dbStore,
-		cache:   make(map[string]*models.User),
-		session: session,
+		dbStore:   dbStore,
+		usercahce: make(map[string]*models.User),
+		session:   session,
 	}
 }
 
 func (s *CachedAppStore) GetUserWithRoleByEmail(email string) (*models.User, error) {
-	if user, ok := s.cache[email]; ok {
+	if user, ok := s.usercahce[email]; ok {
 		return user, nil
 	}
 
@@ -38,7 +38,7 @@ func (s *CachedAppStore) GetUserWithRoleByEmail(email string) (*models.User, err
 	}
 
 	user.Role = *role
-	s.cache[email] = user
+	s.usercahce[email] = user
 	return user, nil
 }
 
@@ -54,7 +54,7 @@ func (s *CachedAppStore) CreateUserWithRole(user *models.User, role *models.Role
 		return err
 	}
 
-	s.cache[user.Email] = user
+	s.usercahce[user.Email] = user
 	return nil
 }
 
@@ -70,10 +70,26 @@ func (s *CachedAppStore) SaveSession(session *sessions.Session, r *http.Request,
 	return s.session.SaveSession(r, w, session)
 }
 
-func (s *CachedAppStore) GetServers(servers *[]models.Server) error {
-	return s.dbStore.GetServers(servers)
+func (s *CachedAppStore) GetServers() ([]models.Server, error) {
+	var servers []models.Server
+	err := s.dbStore.GetServers(&servers)
+	return servers, err
 }
 
-func (s *CachedAppStore) GetEvents(events *[]models.Event) error {
-	return s.dbStore.GetEvents(events)
+func (s *CachedAppStore) GetEvents() ([]models.Event, error) {
+	var events []models.Event
+	err := s.dbStore.GetEvents(&events)
+	return events, err
+}
+
+// FilterByUserRoles filters items by user roles
+func FilterByUserRoles[T any](items []T, user *models.User, getRolesFunc func(T) string) []T {
+	var accessibleItems []T
+	for _, item := range items {
+		roles := getRolesFunc(item)
+		if auth.HasRequiredRoles(user, auth.ConvertStringToRoles(roles)) {
+			accessibleItems = append(accessibleItems, item)
+		}
+	}
+	return accessibleItems
 }
