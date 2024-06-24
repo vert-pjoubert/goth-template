@@ -1,6 +1,6 @@
 ### Go Templ + HTMX Website Template Documentation
 
-This documentation provides an overview of the architecture and functionalities of the Go Templ + HTMX website template. It covers how we render pages, handle authentication, manage theme switching, and integrate with OAuth2 and XORM for database interactions. The goal is to give a clear understanding of how the components work together without diving into large code samples.
+This documentation provides an overview of the architecture and functionalities of the Go Templ + HTMX website template. It covers how we render pages, handle authentication, manage theme switching, and integrate with OAuth2 and SQLX for database interactions. The goal is to give a clear understanding of how the components work together without diving into large code samples.
 
 #### 1. **Overview**
 
