@@ -1,0 +1,8 @@
+package templates
+
+templ DynamicViewLayout(contentTarget string, dataTarget string) {
+    <div id="dynamic-view-layout" class="flex-container">
+        <div id="dynamic-content" class="content" hx-get={contentTarget} hx-trigger="load" hx-swap="innerHTML"></div>
+        <div id="dynamic-data" class="data" hx-get={dataTarget} hx-trigger="load" hx-swap="innerHTML"></div>
+    </div>
+}
