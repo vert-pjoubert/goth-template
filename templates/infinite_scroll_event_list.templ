@@ -14,7 +14,7 @@ templ EventsInfiniteScroll(page int, events []Event) {
                 event.EventType
             )
         }
-        <div hx-get={"/load-more-events?page=" + itoa(page + 1)} hx-trigger="revealed" hx-swap="afterend">
+        <div hx-get={"/load-more-events?page=" + page } hx-trigger="revealed" hx-swap="afterend">
             <p>Loading more events...</p>
         </div>
     </div>
