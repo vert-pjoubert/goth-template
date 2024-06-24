@@ -1,6 +1,6 @@
 package templates
 
-templ EventsInfiniteScroll(page int, events []Event) {
+templ EventsInfiniteScroll(nextpage int, events []Event) {
     <div id="events-list">
         for _, event := range events {
             @EventCard(
@@ -14,7 +14,7 @@ templ EventsInfiniteScroll(page int, events []Event) {
                 event.EventType
             )
         }
-        <div hx-get={"/load-more-events?page=" + page } hx-trigger="revealed" hx-swap="afterend">
+        <div hx-get={"/load-more-events?page=" + nextpage } hx-trigger="revealed" hx-swap="afterend">
             <p>Loading more events...</p>
         </div>
     </div>
