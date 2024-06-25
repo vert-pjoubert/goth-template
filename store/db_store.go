@@ -1,7 +1,7 @@
 package store
 
 import (
-	"github.com/vert-pjoubert/goth-template/store/models"
+	"github.com/vert-pjoubert/goth-template/repositories/models"
 )
 
 type DbStore interface {
@@ -14,6 +14,4 @@ type DbStore interface {
 	GetRoleByName(name string) (*models.Role, error)
 	UpdateRole(role *models.Role) error
 	DeleteRole(role *models.Role) error
-	GetServers(servers *[]models.Server) error
-	GetEvents(events *[]models.Event) error
 }

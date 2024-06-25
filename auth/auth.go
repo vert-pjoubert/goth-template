@@ -12,7 +12,7 @@ import (
 
 	"github.com/coreos/go-oidc"
 	"github.com/gorilla/sessions"
-	"github.com/vert-pjoubert/goth-template/store/models"
+	"github.com/vert-pjoubert/goth-template/repositories/models"
 	"golang.org/x/oauth2"
 )
 
@@ -32,15 +32,14 @@ type TokenCacheEntry struct {
 	AccessToken string
 }
 
-// Update IAppStore interface to include GetRoleByName
+// IAppStore interface defines the core methods required for application operations.
 type IAppStore interface {
-	GetUserWithRoleByEmail(email string) (*models.User, error)
-	CreateUserWithRole(user *models.User, role *models.Role) error
+	GetUserByEmail(email string) (*models.User, error)
+	GetUserRoles(user *models.User) ([]string, error)
+	GetRolePermissions(role *models.Role) ([]string, error)
+	GetRoleByName(name string) (*models.Role, error)
 	GetSession(r *http.Request) (*sessions.Session, error)
 	SaveSession(session *sessions.Session, r *http.Request, w http.ResponseWriter) error
-	GetServers() ([]models.Server, error)
-	GetEvents() ([]models.Event, error)
-	GetRoleByName(name string) (*models.Role, error) // New method
 }
 
 // OAuth2Authenticator implements the IAuthenticator interface using OAuth2 and OpenID Connect
@@ -226,16 +225,22 @@ func (a *OAuth2Authenticator) IsAuthenticated(w http.ResponseWriter, r *http.Req
 	return true, nil
 }
 
-func (a *OAuth2Authenticator) HasPermission(userRole string, requiredPermission string) (bool, error) {
-	role, err := a.Store.GetRoleByName(userRole)
-	if err != nil {
-		a.logMessage("Failed to retrieve role: " + err.Error())
-		return false, err
-	}
+// HasPermission checks if the user has the required permission.
+// userRoles: a semicolon-separated string of user roles
+// requiredPermission: the permission required to access a resource
+func (a *OAuth2Authenticator) HasPermission(userRoles string, requiredPermission string) (bool, error) {
+	roles := ConvertStringToRoles(userRoles)
+	for _, role := range roles {
+		roleData, err := a.Store.GetRoleByName(role)
+		if err != nil {
+			a.logMessage("Failed to retrieve role: " + err.Error())
+			return false, err
+		}
 
-	permissions := ConvertStringToPermissions(role.Permissions)
-	if HasPermission(permissions, requiredPermission) {
-		return true, nil
+		permissions := ConvertStringToPermissions(roleData.Permissions)
+		if HasPermission(permissions, requiredPermission) {
+			return true, nil
+		}
 	}
 
 	return false, nil
@@ -303,7 +308,7 @@ func (a *OAuth2Authenticator) CallbackHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	storedUser, err := a.Store.GetUserWithRoleByEmail(claims.Email)
+	storedUser, err := a.Store.GetUserByEmail(claims.Email)
 	if err != nil {
 		a.logMessage("Failed to retrieve user: " + err.Error())
 		http.Error(w, "Failed to retrieve user: "+err.Error(), http.StatusInternalServerError)
@@ -314,7 +319,7 @@ func (a *OAuth2Authenticator) CallbackHandler(w http.ResponseWriter, r *http.Req
 	session.Values["token"] = oauth2Token.AccessToken
 	session.Values["refresh_token"] = oauth2Token.RefreshToken
 	session.Values["user"] = storedUser.Email
-	session.Values["role"] = storedUser.Role.Name
+	session.Values["roles"] = storedUser.Roles
 	session.Values["created_at"] = time.Now()
 
 	if err := a.Session.SaveSession(r, w, session); err != nil {

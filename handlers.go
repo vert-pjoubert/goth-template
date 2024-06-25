@@ -82,14 +82,6 @@ func (h *Handlers) SettingsViewHandler(w http.ResponseWriter, r *http.Request, u
 	content.Render(context.Background(), w)
 }
 
-func (h *Handlers) ServersViewHandler(w http.ResponseWriter, r *http.Request, user *models.User) {
-	h.ViewRenderer.ServersViewRender(w, r, user)
-}
-
-func (h *Handlers) EventsViewHandler(w http.ResponseWriter, r *http.Request, user *models.User) {
-	h.ViewRenderer.EventsViewRender(w, r, user)
-}
-
 func secureFileServer(root http.FileSystem) http.Handler {
 	allowedExtensions := map[string]bool{
 		".css":  true,

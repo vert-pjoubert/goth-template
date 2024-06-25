@@ -3,7 +3,7 @@ package auth
 import (
 	"strings"
 
-	"github.com/vert-pjoubert/goth-template/store/models"
+	"github.com/vert-pjoubert/goth-template/repositories/models"
 )
 
 // ConvertPermissionsToString converts a slice of permissions to a semicolon-separated string
@@ -35,7 +35,7 @@ func HasRequiredRoles(user *models.User, requiredRoles []string) bool {
 		return true
 	}
 
-	userRole := user.Role.Name
+	userRole := user.Roles
 	for _, role := range requiredRoles {
 		if role == userRole {
 			return true
@@ -50,7 +50,7 @@ func HasRequiredPermissions(user *models.User, requiredPermissions []string) boo
 		return true
 	}
 
-	userPermissions := ConvertStringToPermissions(user.Role.Permissions)
+	userPermissions := ConvertStringToPermissions(user.Roles)
 	for _, perm := range requiredPermissions {
 		if !contains(userPermissions, perm) {
 			return false
@@ -80,21 +80,21 @@ func ConvertStringToRoles(rolesString string) []string {
 
 // HasRequiredRolesMap checks if the user has any of the roles required to access an item.
 func HasRequiredRolesMap(user *models.User, requiredRoles map[string]bool) bool {
-    userRoles := ConvertStringToRolesMap(user.Roles)
-    for role := range requiredRoles {
-        if userRoles[role] {
-            return true
-        }
-    }
-    return false
+	userRoles := ConvertStringToRolesMap(user.Roles)
+	for role := range requiredRoles {
+		if userRoles[role] {
+			return true
+		}
+	}
+	return false
 }
 
 // ConvertStringToRolesMap converts semicolon-separated roles string to a map for quicker access.
 func ConvertStringToRolesMap(rolesStr string) map[string]bool {
-    rolesMap := make(map[string]bool)
-    roles := strings.Split(rolesStr, ";")
-    for _, role := range roles {
-        rolesMap[role] = true
-    }
-    return rolesMap
+	rolesMap := make(map[string]bool)
+	roles := strings.Split(rolesStr, ";")
+	for _, role := range roles {
+		rolesMap[role] = true
+	}
+	return rolesMap
 }

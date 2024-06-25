@@ -1,11 +1,10 @@
 package store
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/vert-pjoubert/goth-template/store/models"
+	"github.com/vert-pjoubert/goth-template/repositories/models"
 )
 
 type SqlxDbStore struct {
@@ -83,97 +82,6 @@ func (s *SqlxDbStore) DeleteRole(role *models.Role) error {
 	query := `DELETE FROM roles WHERE id = $1`
 	_, err := s.db.Exec(query, role.ID)
 	return err
-}
-
-// ##############################################################
-// Server Methods
-
-func (s *SqlxDbStore) CreateServer(server *models.Server) error {
-	query := `INSERT INTO servers (name, ip) VALUES (:name, :ip)`
-	_, err := s.db.NamedExec(query, server)
-	return err
-}
-
-func (s *SqlxDbStore) GetServerByID(id int64) (*models.Server, error) {
-	server := new(models.Server)
-	err := GetTableByFilter(s.db, "servers", "id", id, server)
-	return server, err
-}
-
-func (s *SqlxDbStore) UpdateServer(server *models.Server) error {
-	query := `UPDATE servers SET name = :name, ip = :ip WHERE id = :id`
-	_, err := s.db.NamedExec(query, server)
-	return err
-}
-
-func (s *SqlxDbStore) DeleteServer(id int64) error {
-	query := `DELETE FROM servers WHERE id = $1`
-	_, err := s.db.Exec(query, id)
-	return err
-}
-
-// ##############################################################
-// Event Methods
-
-func (s *SqlxDbStore) CreateEvent(event *models.Event) error {
-	query := `INSERT INTO events (name, date) VALUES (:name, :date)`
-	_, err := s.db.NamedExec(query, event)
-	return err
-}
-
-// Helper struct to handle JSON string conversion
-type eventWithJSONString struct {
-	models.Event
-	RolesJSON string `db:"roles"`
-}
-
-func (s *SqlxDbStore) GetEventByID(id int64) (*models.Event, error) {
-	event := new(eventWithJSONString)
-	err := GetTableByFilter(s.db, "events", "id", id, event)
-	if err != nil {
-		return nil, err
-	}
-
-	// Unmarshal the JSON string in the RolesJSON field into the Roles field
-	if err := json.Unmarshal([]byte(event.RolesJSON), &event.Roles); err != nil {
-		return nil, fmt.Errorf("error unmarshalling roles: %v", err)
-	}
-
-	return &event.Event, nil
-}
-
-func (s *SqlxDbStore) UpdateEvent(event *models.Event) error {
-	query := `UPDATE events SET name = :name, date = :date WHERE id = :id`
-	_, err := s.db.NamedExec(query, event)
-	return err
-}
-
-func (s *SqlxDbStore) DeleteEvent(id int64) error {
-	query := `DELETE FROM events WHERE id = $1`
-	_, err := s.db.Exec(query, id)
-	return err
-}
-
-// ##############################################################
-// Get Data for Views
-
-func (s *SqlxDbStore) GetServers(servers *[]models.Server) error {
-	query := `SELECT * FROM servers`
-	return s.db.Select(servers, query)
-}
-
-func (s *SqlxDbStore) GetEvents(events *[]models.Event) error {
-	query := `SELECT * FROM events`
-	return s.db.Select(events, query)
-}
-
-// ##############################################################
-// Example of FilterBy Usage
-
-func (s *SqlxDbStore) GetEventsByRole(role string) ([]models.Event, error) {
-	var events []models.Event
-	err := FilterBy(s.db, "events", "role", role, &events)
-	return events, err
 }
 
 // GetRoleByName retrieves a role by name

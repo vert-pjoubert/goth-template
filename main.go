@@ -12,8 +12,6 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/vert-pjoubert/goth-template/auth"
 	"github.com/vert-pjoubert/goth-template/store"
-	"github.com/vert-pjoubert/goth-template/store/models"
-	"xorm.io/xorm"
 )
 
 func init() {
@@ -24,21 +22,7 @@ func init() {
 
 }
 
-func initDB(config map[string]string) store.DbStore {
-	dbType := config["DB_TYPE"]
-
-	switch dbType {
-	case "sqlx":
-		return initSqlxDB(config)
-	case "xorm":
-		return initXormDB(config)
-	default:
-		log.Fatalf("Unknown DB_TYPE: %s", dbType)
-		return nil
-	}
-}
-
-func initSqlxDB(config map[string]string) *store.SqlxDbStore {
+func initDB(config map[string]string) *store.SqlxDbStore {
 	dbUser := config["DB_USER"]
 	dbPassword := config["DB_PASSWORD"]
 	dbHost := config["DB_HOST"]
@@ -84,29 +68,6 @@ func initSqlxDB(config map[string]string) *store.SqlxDbStore {
 	return store.NewSqlxDbStore(db)
 }
 
-func initXormDB(config map[string]string) *store.XormDbStore {
-	dbUser := config["DB_USER"]
-	dbPassword := config["DB_PASSWORD"]
-	dbHost := config["DB_HOST"]
-	dbPort := config["DB_PORT"]
-	dbName := config["DB_NAME"]
-
-	dataSourceName := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8&parseTime=True&loc=Local",
-		dbUser, dbPassword, dbHost, dbPort, dbName)
-
-	engine, err := xorm.NewEngine("mysql", dataSourceName)
-	if err != nil {
-		log.Fatalf("Failed to create XORM engine: %v", err)
-	}
-
-	err = engine.Sync2(new(models.User), new(models.Role))
-	if err != nil {
-		log.Fatalf("Failed to sync database schema: %v", err)
-	}
-
-	return store.NewXormDbStore(engine)
-}
-
 func main() {
 	// Load configuration
 	config, err := LoadEnvConfig(".env")
@@ -123,7 +84,7 @@ func main() {
 	sessionManager, _ := auth.NewCookieSessionManager(authKey, encKey)
 
 	// Create cached app store
-	appStore := store.NewCachedAppStore(dbStore, sessionManager)
+	appStore := store.NewAppStore(dbStore, sessionManager)
 
 	// Initialize OAuth2 authenticator
 	authenticator, err := auth.NewOAuth2Authenticator(config, sessionManager, appStore)
@@ -137,9 +98,6 @@ func main() {
 
 	// Register views
 	h := NewHandlers(authenticator, renderer, viewRenderer, sessionManager)
-	viewRenderer.RegisterView("settings", h.SettingsViewHandler, []string{"admin", "user"}, []string{"read"})
-	viewRenderer.RegisterView("servers", h.ServersViewHandler, []string{"admin"}, []string{"read"})
-	viewRenderer.RegisterView("events", h.EventsViewHandler, []string{"admin", "user"}, []string{"read"})
 
 	// Set up HTTP routes
 	http.Handle("/static/", http.StripPrefix("/static/", secureFileServer(http.Dir("static"))))

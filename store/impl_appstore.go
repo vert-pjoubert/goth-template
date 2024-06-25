@@ -1,97 +1,83 @@
 package store
 
 import (
+	"fmt"
 	"net/http"
+	"reflect"
 
 	"github.com/gorilla/sessions"
 	"github.com/vert-pjoubert/goth-template/auth"
-	"github.com/vert-pjoubert/goth-template/store/models"
+	"github.com/vert-pjoubert/goth-template/repositories"
+	"github.com/vert-pjoubert/goth-template/repositories/models"
+	"github.com/vert-pjoubert/goth-template/utils"
 )
 
-type CachedAppStore struct {
-	dbStore   DbStore
-	usercahce map[string]*models.User
-	session   auth.ISessionManager
+// AppStore struct integrates IAppStore interface methods and repository management.
+type AppStore struct {
+	Database       *SqlxDbStore
+	SessionManager auth.ISessionManager
+	UserRepository *repositories.SQLUserRepository
+	RoleRepository *repositories.SQLRoleRepository
+	Repositories   map[reflect.Type]interface{}
 }
 
-func NewCachedAppStore(dbStore DbStore, session auth.ISessionManager) *CachedAppStore {
-	return &CachedAppStore{
-		dbStore:   dbStore,
-		usercahce: make(map[string]*models.User),
-		session:   session,
+// NewAppStore initializes a new AppStore.
+func NewAppStore(database *SqlxDbStore, sessionManager auth.ISessionManager) *AppStore {
+	store := &AppStore{
+		Database:       database,
+		SessionManager: sessionManager,
+		UserRepository: repositories.NewSQLUserRepository(database.db),
+		RoleRepository: repositories.NewSQLRoleRepository(database.db),
+		Repositories:   make(map[reflect.Type]interface{}),
 	}
+	return store
 }
 
-func (s *CachedAppStore) GetUserWithRoleByEmail(email string) (*models.User, error) {
-	if user, ok := s.usercahce[email]; ok {
-		return user, nil
+// User and Role Methods
+func (store *AppStore) GetUserByEmail(email string) (*models.User, error) {
+	return store.UserRepository.GetUserByEmail(email)
+}
+
+func (store *AppStore) GetUserRoles(user *models.User) ([]string, error) {
+	roleNames := utils.ConvertStringToRoles(user.Roles)
+	var expandedRoles []string
+	for _, roleName := range roleNames {
+		role, err := store.RoleRepository.GetRoleByName(roleName)
+		if err != nil {
+			return nil, err
+		}
+		expandedRoles = append(expandedRoles, role.Name)
 	}
+	return expandedRoles, nil
+}
 
-	user, err := s.dbStore.GetUserByEmail(email)
-	if err != nil {
-		return nil, err
+func (store *AppStore) GetRolePermissions(role *models.Role) ([]string, error) {
+	return utils.ConvertStringToPermissions(role.Permissions), nil
+}
+
+func (store *AppStore) GetRoleByName(name string) (*models.Role, error) {
+	return store.RoleRepository.GetRoleByName(name)
+}
+
+// Session Methods
+func (store *AppStore) GetSession(r *http.Request) (*sessions.Session, error) {
+	return store.SessionManager.GetSession(r)
+}
+
+func (store *AppStore) SaveSession(session *sessions.Session, r *http.Request, w http.ResponseWriter) error {
+	return store.SessionManager.SaveSession(r, w, session)
+}
+
+// RegisterRepo adds a new repository to the store.
+func (store *AppStore) RegisterRepo(repo interface{}) {
+	repoType := reflect.TypeOf(repo).Elem()
+	store.Repositories[repoType] = repo
+}
+
+// GetRepo retrieves a repository by type.
+func (store *AppStore) GetRepo(repoType reflect.Type) (interface{}, error) {
+	if repo, exists := store.Repositories[repoType]; exists {
+		return repo, nil
 	}
-
-	role, err := s.dbStore.GetRoleByID(user.RoleID)
-	if err != nil {
-		return nil, err
-	}
-
-	user.Role = *role
-	s.usercahce[email] = user
-	return user, nil
-}
-
-func (s *CachedAppStore) CreateUserWithRole(user *models.User, role *models.Role) error {
-	err := s.dbStore.CreateRole(role)
-	if err != nil {
-		return err
-	}
-
-	user.RoleID = role.ID
-	err = s.dbStore.CreateUser(user)
-	if err != nil {
-		return err
-	}
-
-	s.usercahce[user.Email] = user
-	return nil
-}
-
-func (s *CachedAppStore) GetRoleByName(name string) (*models.Role, error) {
-	return s.dbStore.GetRoleByName(name)
-}
-
-func (s *CachedAppStore) GetSession(r *http.Request) (*sessions.Session, error) {
-	return s.session.GetSession(r)
-}
-
-func (s *CachedAppStore) SaveSession(session *sessions.Session, r *http.Request, w http.ResponseWriter) error {
-	return s.session.SaveSession(r, w, session)
-}
-
-func (s *CachedAppStore) GetServers() ([]models.Server, error) {
-	var servers []models.Server
-	err := s.dbStore.GetServers(&servers)
-	return servers, err
-}
-
-func (s *CachedAppStore) GetEvents() ([]models.Event, error) {
-	var events []models.Event
-	err := s.dbStore.GetEvents(&events)
-	return events, err
-}
-
-// FilterByUserRoles filters items by user roles using a map for faster role checks.
-func FilterByUserRoles[T any](items []T, user *models.User, getRolesFunc func(T) string) []T {
-    userRolesMap := auth.ConvertStringToRolesMap(user.Roles) // Convert user roles once for all items
-    var accessibleItems []T
-    for _, item := range items {
-        rolesStr := getRolesFunc(item)
-        requiredRoles := auth.ConvertStringToRolesMap(rolesStr)
-        if auth.HasRequiredRolesMap(userRolesMap, requiredRoles) {
-            accessibleItems = append(accessibleItems, item)
-        }
-    }
-    return accessibleItems
+	return nil, fmt.Errorf("repository not registered: %s", repoType.Name())
 }

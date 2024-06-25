@@ -1,17 +1,13 @@
 package main
 
 import (
-	"context"
 	"net/http"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/vert-pjoubert/goth-template/auth"
-	"github.com/vert-pjoubert/goth-template/store"
-	"github.com/vert-pjoubert/goth-template/store/models"
-	"github.com/vert-pjoubert/goth-template/templates"
-	"github.com/vert-pjoubert/goth-template/utils"
+	"github.com/vert-pjoubert/goth-template/repositories/models"
 )
 
 const pageSize = 25
@@ -96,7 +92,7 @@ func (vr *ViewRenderer) RenderView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := vr.AppStore.GetUserWithRoleByEmail(userEmail)
+	user, err := vr.AppStore.GetUserByEmail(userEmail)
 	if err != nil {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
@@ -110,6 +106,26 @@ func (vr *ViewRenderer) RenderView(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if the user has the required roles and permissions
+	userRoles, err := vr.AppStore.GetUserRoles(user)
+	if err != nil {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	rolePermissions := make(map[string][]string)
+	for _, role := range userRoles {
+		roleModel, err := vr.AppStore.GetRoleByName(role)
+		if err != nil {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		rolePermissions[role], err = vr.AppStore.GetRolePermissions(roleModel)
+		if err != nil {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+	}
+
 	if !auth.HasRequiredRoles(user, viewMetadata.RequiredRoles) || !auth.HasRequiredPermissions(user, viewMetadata.RequiredPermissions) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
@@ -118,80 +134,7 @@ func (vr *ViewRenderer) RenderView(w http.ResponseWriter, r *http.Request) {
 	viewMetadata.Handler(w, r, user)
 }
 
-// RenderAccessibleServers renders a list of accessible servers inside the infinite scroll template
-func (vr *ViewRenderer) ServersViewRender(w http.ResponseWriter, r *http.Request, user *models.User) {
-	page := getPageNumber(r)
-	cacheKey := "servers_" + user.Email + "_" + strconv.Itoa(page)
-
-	if cached, found := vr.cache.Get(cacheKey); found {
-		templateServers := cached.([]templates.Server)
-		nextPage := strconv.Itoa(page + 1)
-		content := templates.ServersInfiniteScroll(nextPage, templateServers)
-		content.Render(context.Background(), w)
-		return
-	}
-
-	servers, err := vr.AppStore.GetServers()
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
-	accessibleServers := store.FilterByUserRoles(servers, user, func(server models.Server) string {
-		return server.Roles
-	})
-
-	paginatedServers := utils.Paginate(accessibleServers, page, pageSize)
-
-	templateServers := make([]templates.Server, len(paginatedServers))
-	for i, server := range paginatedServers {
-		templateServers[i] = templates.NewServer(server)
-	}
-
-	vr.cache.Set(cacheKey, templateServers)
-
-	nextPageStr := strconv.Itoa(page)
-	content := templates.ServersInfiniteScroll(nextPageStr, templateServers)
-	content.Render(context.Background(), w)
-}
-
-// RenderAccessibleEvents renders a list of accessible events inside the infinite scroll template
-func (vr *ViewRenderer) EventsViewRender(w http.ResponseWriter, r *http.Request, user *models.User) {
-	page := getPageNumber(r)
-	cacheKey := "events_" + user.Email + "_" + strconv.Itoa(page)
-
-	if cached, found := vr.cache.Get(cacheKey); found {
-		templateEvents := cached.([]templates.Event)
-		nextPage := strconv.Itoa(page + 1)
-		content := templates.EventsInfiniteScroll(nextPage, templateEvents)
-		content.Render(context.Background(), w)
-		return
-	}
-
-	events, err := vr.AppStore.GetEvents()
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
-	accessibleEvents := store.FilterByUserRoles(events, user, func(event models.Event) string {
-		return event.Roles
-	})
-
-	paginatedEvents := utils.Paginate(accessibleEvents, page, pageSize)
-
-	templateEvents := make([]templates.Event, len(paginatedEvents))
-	for i, event := range paginatedEvents {
-		templateEvents[i] = templates.NewEvent(event)
-	}
-
-	vr.cache.Set(cacheKey, templateEvents)
-
-	nextPageStr := strconv.Itoa(page)
-	content := templates.EventsInfiniteScroll(nextPageStr, templateEvents)
-	content.Render(context.Background(), w)
-}
-
+// getPageNumber extracts the page number from the request
 func getPageNumber(r *http.Request) int {
 	pageStr := r.URL.Query().Get("page")
 	if pageStr == "" {
