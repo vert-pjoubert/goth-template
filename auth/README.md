@@ -1,5 +1,3 @@
-### README.md
-
 # OAuth2Authenticator
 
 The `OAuth2Authenticator` is a Go package that implements OAuth2 and OpenID Connect authentication for web applications. It provides methods for handling login, callback, and logout processes, as well as checking if a user is authenticated. The package uses session management and token caching to track user sessions and authorization levels efficiently.
