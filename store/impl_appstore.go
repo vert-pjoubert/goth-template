@@ -82,14 +82,16 @@ func (s *CachedAppStore) GetEvents() ([]models.Event, error) {
 	return events, err
 }
 
-// FilterByUserRoles filters items by user roles
+// FilterByUserRoles filters items by user roles using a map for faster role checks.
 func FilterByUserRoles[T any](items []T, user *models.User, getRolesFunc func(T) string) []T {
-	var accessibleItems []T
-	for _, item := range items {
-		roles := getRolesFunc(item)
-		if auth.HasRequiredRoles(user, auth.ConvertStringToRoles(roles)) {
-			accessibleItems = append(accessibleItems, item)
-		}
-	}
-	return accessibleItems
+    userRolesMap := auth.ConvertStringToRolesMap(user.Roles) // Convert user roles once for all items
+    var accessibleItems []T
+    for _, item := range items {
+        rolesStr := getRolesFunc(item)
+        requiredRoles := auth.ConvertStringToRolesMap(rolesStr)
+        if auth.HasRequiredRolesMap(userRolesMap, requiredRoles) {
+            accessibleItems = append(accessibleItems, item)
+        }
+    }
+    return accessibleItems
 }
