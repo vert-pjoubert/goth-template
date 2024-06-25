@@ -15,6 +15,16 @@ func ConvertStringToRoles(rolesString string) []string {
 	return strings.Split(rolesString, ";")
 }
 
+// ConvertStringToRoles converts semicolon-separated roles string to a map for quicker access.
+func ConvertStringToRolesMap(rolesStr string) map[string]bool {
+    rolesMap := make(map[string]bool)
+    roles := strings.Split(rolesStr, ";")
+    for _, role := range roles {
+        rolesMap[role] = true
+    }
+    return rolesMap
+}
+
 // ConvertPermissionsToString converts a slice of permissions to a semicolon-separated string
 func ConvertPermissionsToString(permissions []string) string {
 	return strings.Join(permissions, ";")
