@@ -17,8 +17,10 @@ import (
 	"github.com/gorilla/sessions"
 	"github.com/vert-pjoubert/goth-template/auth"
 	"github.com/vert-pjoubert/goth-template/mockoauth2"
+	"github.com/vert-pjoubert/goth-template/store"
 	"github.com/vert-pjoubert/goth-template/store/models"
 	"github.com/vert-pjoubert/goth-template/templates"
+	"github.com/vert-pjoubert/goth-template/utils"
 )
 
 func init() {
@@ -96,7 +98,6 @@ func TestPageRenderPipeline(t *testing.T) {
 	viewRenderer.RegisterView("settings", h.SettingsViewHandler, []string{"admin", "user"}, []string{"read"})
 	viewRenderer.RegisterView("servers", h.ServersViewHandler, []string{"admin"}, []string{"read"})
 	viewRenderer.RegisterView("events", h.EventsViewHandler, []string{"admin", "user"}, []string{"read"})
-	viewRenderer.RegisterView("protected", h.ProtectedViewHandler, []string{"admin"}, []string{"admin_only"})
 
 	// Define test cases
 	testCases := []struct {
@@ -109,7 +110,6 @@ func TestPageRenderPipeline(t *testing.T) {
 		{"SettingsPage", "/view?view=settings", true, http.StatusOK},
 		{"ServersPage", "/view?view=servers", true, http.StatusOK},
 		{"EventsPage", "/view?view=events", true, http.StatusOK},
-		{"ProtectedPage", "/view?view=protected", true, http.StatusForbidden},
 	}
 
 	// Create the dump directory for storing test outputs
@@ -198,29 +198,44 @@ func TestPageRenderPipeline(t *testing.T) {
 				case "/view?view=settings":
 					h.Renderer.RenderWithLayout(w, templates.Settings(), r)
 				case "/view?view=servers":
-					servers, err := h.ViewRenderer.getAccessibleServers(user.Role.Name)
+					// Fetch and filter servers based on user roles
+					allServers, err := h.ViewRenderer.AppStore.GetServers()
 					if err != nil {
 						http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 						return
 					}
-					templateServers := make([]templates.Server, len(servers))
-					for i, server := range servers {
+					accessibleServers := store.FilterByUserRoles(allServers, user, func(server models.Server) string {
+						return server.Roles
+					})
+					// Paginate the servers
+					paginatedServers := utils.Paginate(accessibleServers, 1, 25)
+
+					// Convert to template servers
+					templateServers := make([]templates.Server, len(paginatedServers))
+					for i, server := range paginatedServers {
 						templateServers[i] = templates.NewServer(server)
 					}
 					h.Renderer.RenderWithLayout(w, templates.ServersList(templateServers), r)
+
 				case "/view?view=events":
-					events, err := h.ViewRenderer.getAccessibleEvents(user.Role.Name)
+					// Fetch and filter events based on user roles
+					allEvents, err := h.ViewRenderer.AppStore.GetEvents()
 					if err != nil {
 						http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 						return
 					}
-					templateEvents := make([]templates.Event, len(events))
-					for i, event := range events {
+					accessibleEvents := store.FilterByUserRoles(allEvents, user, func(event models.Event) string {
+						return event.Roles
+					})
+					// Paginate the events
+					paginatedEvents := utils.Paginate(accessibleEvents, 1, 25)
+
+					// Convert to template events
+					templateEvents := make([]templates.Event, len(paginatedEvents))
+					for i, event := range paginatedEvents {
 						templateEvents[i] = templates.NewEvent(event)
 					}
 					h.Renderer.RenderWithLayout(w, templates.EventsList(templateEvents), r)
-				case "/view?view=protected":
-					h.ProtectedViewHandler(w, r, user)
 				default:
 					http.Error(w, "Not Found", http.StatusNotFound)
 				}
@@ -280,8 +295,8 @@ func (m *mockAppStore) SaveSession(session *sessions.Session, r *http.Request, w
 	return m.session.SaveSession(r, w, session)
 }
 
-func (m *mockAppStore) GetServers(servers *[]models.Server) error {
-	*servers = []models.Server{
+func (m *mockAppStore) GetServers() ([]models.Server, error) {
+	var servers = []models.Server{
 		{
 			ID:    1,
 			Name:  "Server 1",
@@ -297,11 +312,17 @@ func (m *mockAppStore) GetServers(servers *[]models.Server) error {
 			Roles: "admin;operator_group_16",
 		},
 	}
-	return nil
+
+	// Simulate an error if necessary
+	var err error
+	// Uncomment the following line to simulate an error
+	// err = errors.New("failed to get servers")
+
+	return servers, err
 }
 
-func (m *mockAppStore) GetEvents(events *[]models.Event) error {
-	*events = []models.Event{
+func (m *mockAppStore) GetEvents() ([]models.Event, error) {
+	var events = []models.Event{
 		{
 			ID:            1,
 			Name:          "Event 1",
@@ -329,7 +350,8 @@ func (m *mockAppStore) GetEvents(events *[]models.Event) error {
 			Roles:         "admin;user;operator_group_16",
 		},
 	}
-	return nil
+	var err error
+	return events, err
 }
 
 func (m *mockAppStore) GetRoleByName(name string) (*models.Role, error) {

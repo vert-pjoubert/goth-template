@@ -11,7 +11,7 @@ type DbStore interface {
 	DeleteUser(user *models.User) error
 	CreateRole(role *models.Role) error
 	GetRoleByID(id int64) (*models.Role, error)
-	GetRoleByName(name string) (*models.Role, error) // New method
+	GetRoleByName(name string) (*models.Role, error)
 	UpdateRole(role *models.Role) error
 	DeleteRole(role *models.Role) error
 	GetServers(servers *[]models.Server) error

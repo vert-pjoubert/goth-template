@@ -140,7 +140,6 @@ func main() {
 	viewRenderer.RegisterView("settings", h.SettingsViewHandler, []string{"admin", "user"}, []string{"read"})
 	viewRenderer.RegisterView("servers", h.ServersViewHandler, []string{"admin"}, []string{"read"})
 	viewRenderer.RegisterView("events", h.EventsViewHandler, []string{"admin", "user"}, []string{"read"})
-	viewRenderer.RegisterView("protected", h.ProtectedViewHandler, []string{"admin"}, []string{"admin_only"})
 
 	// Set up HTTP routes
 	http.Handle("/static/", http.StripPrefix("/static/", secureFileServer(http.Dir("static"))))

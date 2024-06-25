@@ -3,12 +3,19 @@ package main
 import (
 	"context"
 	"net/http"
+	"strconv"
+	"sync"
+	"time"
 
 	"github.com/vert-pjoubert/goth-template/auth"
+	"github.com/vert-pjoubert/goth-template/store"
 	"github.com/vert-pjoubert/goth-template/store/models"
 	"github.com/vert-pjoubert/goth-template/templates"
 	"github.com/vert-pjoubert/goth-template/utils"
 )
+
+const pageSize = 25
+const cacheDuration = time.Minute
 
 type ViewHandler func(http.ResponseWriter, *http.Request, *models.User)
 
@@ -21,12 +28,51 @@ type ViewMetadata struct {
 type ViewRenderer struct {
 	AppStore IAppStore
 	Views    map[string]ViewMetadata
+	cache    *Cache
+}
+
+type Cache struct {
+	mu      sync.Mutex
+	entries map[string]CacheEntry
+}
+
+type CacheEntry struct {
+	data      interface{}
+	timestamp time.Time
+}
+
+func NewCache() *Cache {
+	return &Cache{
+		entries: make(map[string]CacheEntry),
+	}
+}
+
+// Set adds an item to the cache with a timestamp
+func (c *Cache) Set(key string, data interface{}) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.entries[key] = CacheEntry{data, time.Now()}
+}
+
+// Get retrieves an item from the cache if it exists and is not expired
+func (c *Cache) Get(key string) (interface{}, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	entry, found := c.entries[key]
+	if !found || time.Since(entry.timestamp) > cacheDuration {
+		if found {
+			delete(c.entries, key)
+		}
+		return nil, false
+	}
+	return entry.data, true
 }
 
 func NewViewRenderer(appStore IAppStore) *ViewRenderer {
 	return &ViewRenderer{
 		AppStore: appStore,
 		Views:    make(map[string]ViewMetadata),
+		cache:    NewCache(),
 	}
 }
 
@@ -64,7 +110,7 @@ func (vr *ViewRenderer) RenderView(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if the user has the required roles and permissions
-	if !vr.userHasRequiredRoles(user, viewMetadata.RequiredRoles) || !vr.userHasRequiredPermissions(user, viewMetadata.RequiredPermissions) {
+	if !auth.HasRequiredRoles(user, viewMetadata.RequiredRoles) || !auth.HasRequiredPermissions(user, viewMetadata.RequiredPermissions) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -72,104 +118,88 @@ func (vr *ViewRenderer) RenderView(w http.ResponseWriter, r *http.Request) {
 	viewMetadata.Handler(w, r, user)
 }
 
-func (vr *ViewRenderer) userHasRequiredRoles(user *models.User, requiredRoles []string) bool {
-	if len(requiredRoles) == 0 {
-		return true
+// RenderAccessibleServers renders a list of accessible servers inside the infinite scroll template
+func (vr *ViewRenderer) ServersViewRender(w http.ResponseWriter, r *http.Request, user *models.User) {
+	page := getPageNumber(r)
+	cacheKey := "servers_" + user.Email + "_" + strconv.Itoa(page)
+
+	if cached, found := vr.cache.Get(cacheKey); found {
+		templateServers := cached.([]templates.Server)
+		nextPage := strconv.Itoa(page + 1)
+		content := templates.ServersInfiniteScroll(nextPage, templateServers)
+		content.Render(context.Background(), w)
+		return
 	}
 
-	userRole := user.Role.Name
-	for _, role := range requiredRoles {
-		if role == userRole {
-			return true
-		}
-	}
-
-	return false
-}
-
-func (vr *ViewRenderer) userHasRequiredPermissions(user *models.User, requiredPermissions []string) bool {
-	if len(requiredPermissions) == 0 {
-		return true
-	}
-
-	userPermissions := auth.ConvertStringToPermissions(user.Role.Permissions)
-	for _, perm := range requiredPermissions {
-		if !contains(userPermissions, perm) {
-			return false
-		}
-	}
-
-	return true
-}
-
-func (vr *ViewRenderer) RenderAccessibleServers(w http.ResponseWriter, r *http.Request, user *models.User) {
-	servers, err := vr.getAccessibleServers(user.Role.Name)
+	servers, err := vr.AppStore.GetServers()
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-	templateServers := make([]templates.Server, len(servers))
-	for i, server := range servers {
+
+	accessibleServers := store.FilterByUserRoles(servers, user, func(server models.Server) string {
+		return server.Roles
+	})
+
+	paginatedServers := utils.Paginate(accessibleServers, page, pageSize)
+
+	templateServers := make([]templates.Server, len(paginatedServers))
+	for i, server := range paginatedServers {
 		templateServers[i] = templates.NewServer(server)
 	}
-	content := templates.ServersList(templateServers)
+
+	vr.cache.Set(cacheKey, templateServers)
+
+	nextPageStr := strconv.Itoa(page)
+	content := templates.ServersInfiniteScroll(nextPageStr, templateServers)
 	content.Render(context.Background(), w)
 }
 
-func (vr *ViewRenderer) RenderAccessibleEvents(w http.ResponseWriter, r *http.Request, user *models.User) {
-	events, err := vr.getAccessibleEvents(user.Role.Name)
+// RenderAccessibleEvents renders a list of accessible events inside the infinite scroll template
+func (vr *ViewRenderer) EventsViewRender(w http.ResponseWriter, r *http.Request, user *models.User) {
+	page := getPageNumber(r)
+	cacheKey := "events_" + user.Email + "_" + strconv.Itoa(page)
+
+	if cached, found := vr.cache.Get(cacheKey); found {
+		templateEvents := cached.([]templates.Event)
+		nextPage := strconv.Itoa(page + 1)
+		content := templates.EventsInfiniteScroll(nextPage, templateEvents)
+		content.Render(context.Background(), w)
+		return
+	}
+
+	events, err := vr.AppStore.GetEvents()
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-	templateEvents := make([]templates.Event, len(events))
-	for i, event := range events {
+
+	accessibleEvents := store.FilterByUserRoles(events, user, func(event models.Event) string {
+		return event.Roles
+	})
+
+	paginatedEvents := utils.Paginate(accessibleEvents, page, pageSize)
+
+	templateEvents := make([]templates.Event, len(paginatedEvents))
+	for i, event := range paginatedEvents {
 		templateEvents[i] = templates.NewEvent(event)
 	}
-	content := templates.EventsList(templateEvents)
+
+	vr.cache.Set(cacheKey, templateEvents)
+
+	nextPageStr := strconv.Itoa(page)
+	content := templates.EventsInfiniteScroll(nextPageStr, templateEvents)
 	content.Render(context.Background(), w)
 }
 
-func (vr *ViewRenderer) getAccessibleServers(userRole string) ([]models.Server, error) {
-	var servers []models.Server
-	err := vr.AppStore.GetServers(&servers)
-	if err != nil {
-		return nil, err
+func getPageNumber(r *http.Request) int {
+	pageStr := r.URL.Query().Get("page")
+	if pageStr == "" {
+		return 1
 	}
-
-	var accessibleServers []models.Server
-	for _, server := range servers {
-		roles := utils.ConvertStringToRoles(server.Roles) // Parse roles string into a list
-		if contains(roles, userRole) {
-			accessibleServers = append(accessibleServers, server)
-		}
+	page, err := strconv.Atoi(pageStr)
+	if err != nil || page < 1 {
+		return 1
 	}
-	return accessibleServers, nil
-}
-
-func (vr *ViewRenderer) getAccessibleEvents(userRole string) ([]models.Event, error) {
-	var events []models.Event
-	err := vr.AppStore.GetEvents(&events)
-	if err != nil {
-		return nil, err
-	}
-
-	var accessibleEvents []models.Event
-	for _, event := range events {
-		roles := utils.ConvertStringToRoles(event.Roles) // Parse roles string into a list
-		if contains(roles, userRole) {
-			accessibleEvents = append(accessibleEvents, event)
-		}
-	}
-	return accessibleEvents, nil
-}
-
-// contains checks if a slice contains a specific string
-func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
+	return page
 }

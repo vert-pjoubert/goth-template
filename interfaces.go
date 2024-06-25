@@ -29,17 +29,15 @@ type DbStore interface {
 	GetEvents(events *[]models.Event) error
 }
 
-// Update IAppStore interface to include GetRoleByName
 type IAppStore interface {
 	GetUserWithRoleByEmail(email string) (*models.User, error)
 	CreateUserWithRole(user *models.User, role *models.Role) error
+	GetRoleByName(name string) (*models.Role, error)
 	GetSession(r *http.Request) (*sessions.Session, error)
 	SaveSession(session *sessions.Session, r *http.Request, w http.ResponseWriter) error
-	GetServers(servers *[]models.Server) error
-	GetEvents(events *[]models.Event) error
-	GetRoleByName(name string) (*models.Role, error) // New method
+	GetServers() ([]models.Server, error)
+	GetEvents() ([]models.Event, error)
 }
-
 type ISessionManager interface {
 	GetSession(r *http.Request) (*sessions.Session, error)
 	SaveSession(r *http.Request, w http.ResponseWriter, session *sessions.Session) error
