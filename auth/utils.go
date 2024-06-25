@@ -77,3 +77,24 @@ func ConvertStringToRoles(rolesString string) []string {
 	}
 	return strings.Split(rolesString, ";")
 }
+
+// HasRequiredRolesMap checks if the user has any of the roles required to access an item.
+func HasRequiredRolesMap(user *models.User, requiredRoles map[string]bool) bool {
+    userRoles := ConvertStringToRolesMap(user.Roles)
+    for role := range requiredRoles {
+        if userRoles[role] {
+            return true
+        }
+    }
+    return false
+}
+
+// ConvertStringToRolesMap converts semicolon-separated roles string to a map for quicker access.
+func ConvertStringToRolesMap(rolesStr string) map[string]bool {
+    rolesMap := make(map[string]bool)
+    roles := strings.Split(rolesStr, ";")
+    for _, role := range roles {
+        rolesMap[role] = true
+    }
+    return rolesMap
+}
