@@ -4,7 +4,7 @@ This documentation provides an overview of the architecture and functionalities 
 
 #### 1. **Overview**
 
-The website template leverages Go Templ for server-side rendering of HTML templates and HTMX for enhancing the user experience with AJAX capabilities. This combination allows for dynamic and interactive web pages while maintaining a clean and efficient server-side rendering process. Additionally, it supports OAuth2 authentication and integrates both XORM and SQLX for database interactions with MySQL and PostgreSQL.
+The website template leverages Go Templ for server-side rendering of HTML templates and HTMX for enhancing the user experience with AJAX capabilities. This combination allows for dynamic and interactive web pages while maintaining a clean and efficient server-side rendering process. Additionally, it supports OAuth2 authentication and integrates SQLX for database interactions.
 
 ```shell
 go run render.go handlers.go main.go config.go interfaces.go
@@ -53,18 +53,19 @@ go run render.go handlers.go main.go config.go interfaces.go
 **DbStore Interface**
 
 - The `DbStore` interface provides basic CRUD operations for interacting with the database.
-- The `XormDbStore` implementation uses XORM to manage database interactions.
 - The `SQLXDbStore` implementation uses SQLX to manage database interactions.
 
 **AppStore Interface**
 
 - The `AppStore` interface wraps `DbStore` to add caching and application-specific logic.
 - The `CachedAppStore` implementation uses an in-memory cache to enhance performance.
+- User and Role repositories are core to AppStore and are used by the Authenticator.
+- Additional repositories can be registered in the AppStore for use in other modules.
 
 **Managing Application State**
 
 - The `AppStore` interface includes methods for managing user sessions and retrieving user data with roles.
-- The `GetUserWithRoleByEmail` method retrieves user information along with their role from the database.
+- The `GetUserByEmail` method retrieves user information along with their roles and permissions from the database.
 
 #### 5. **Dynamic Content Loading**
 
@@ -95,14 +96,4 @@ go run render.go handlers.go main.go config.go interfaces.go
 - The light theme shows the dark theme button and hides the light theme button.
 - The dark theme shows the light theme button and hides the dark theme button.
 
-#### 7. **Form Handling and AJAX**
 
-**Form Submissions**
-
-- Forms, like the theme change form, use standard POST submissions to update preferences.
-- HTMX attributes are used to enhance forms where asynchronous behavior is needed.
-
-**Event Listeners**
-
-- Event listeners, such as for unauthorized responses, are added to handle specific scenarios dynamically.
-- These listeners enhance user experience by providing immediate feedback and actions without requiring full page reloads.
