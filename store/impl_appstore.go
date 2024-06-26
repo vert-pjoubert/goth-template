@@ -3,7 +3,7 @@ package store
 import (
 	"fmt"
 	"net/http"
-	"reflect"
+	"strings"
 
 	"github.com/gorilla/sessions"
 	"github.com/vert-pjoubert/goth-template/auth"
@@ -18,7 +18,7 @@ type AppStore struct {
 	SessionManager auth.ISessionManager
 	UserRepository *repositories.SQLUserRepository
 	RoleRepository *repositories.SQLRoleRepository
-	Repositories   map[reflect.Type]interface{}
+	Repositories   map[string]interface{}
 }
 
 // NewAppStore initializes a new AppStore.
@@ -28,7 +28,7 @@ func NewAppStore(database *SqlxDbStore, sessionManager auth.ISessionManager) *Ap
 		SessionManager: sessionManager,
 		UserRepository: repositories.NewSQLUserRepository(database.db),
 		RoleRepository: repositories.NewSQLRoleRepository(database.db),
-		Repositories:   make(map[reflect.Type]interface{}),
+		Repositories:   make(map[string]interface{}),
 	}
 	return store
 }
@@ -68,18 +68,9 @@ func (store *AppStore) SaveSession(session *sessions.Session, r *http.Request, w
 	return store.SessionManager.SaveSession(r, w, session)
 }
 
-// RegisterRepo adds a new repository to the store.
-func (store *AppStore) RegisterRepo(repo interface{}) {
-	repoType := reflect.TypeOf(repo).Elem()
-	store.Repositories[repoType] = repo
-}
-
-// GetRepo retrieves a repository by type.
-func (store *AppStore) GetRepo(repoType reflect.Type) (interface{}, error) {
-	if repo, exists := store.Repositories[repoType]; exists {
-		return repo, nil
-	}
-	return nil, fmt.Errorf("repository not registered: %s", repoType.Name())
+// RegisterRepoWithID registers a new repository with a specific ID.
+func (store *AppStore) RegisterRepoWithID(id string, repo interface{}) {
+	store.Repositories[id] = repo
 }
 
 // SearchReposByDomain searches for repositories by domain.
@@ -94,9 +85,17 @@ func (store *AppStore) SearchReposByDomain(domain string) []string {
 	return repoIDs
 }
 
+// GetRepoByID retrieves a repository by its ID.
+func (store *AppStore) GetRepoByID(id string) (interface{}, error) {
+	if repo, exists := store.Repositories[id]; exists {
+		return repo, nil
+	}
+	return nil, fmt.Errorf("repository not registered: %s", id)
+}
+
 // GetUserRepository retrieves the user repository by its ID and type.
-func (store *AppStore) GetUserRepository(repoID, repoType string) (interface{}, error) {
-	repoIDWithDomain := fmt.Sprintf("%s.%s", repoID, repoType)
+func (store *AppStore) GetUserRepository(repoID, repoType string, access string) (interface{}, error) {
+	repoIDWithDomain := fmt.Sprintf("%s.%s.%s", repoID, repoType, access)
 	repo, err := store.GetRepoByID(repoIDWithDomain)
 	if err != nil {
 		return nil, err

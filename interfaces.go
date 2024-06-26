@@ -2,7 +2,6 @@ package main
 
 import (
 	"net/http"
-	"reflect"
 
 	"github.com/gorilla/sessions"
 	"github.com/vert-pjoubert/goth-template/repositories/models"
@@ -36,8 +35,12 @@ type IAppStore interface {
 	GetRoleByName(name string) (*models.Role, error)
 	GetSession(r *http.Request) (*sessions.Session, error)
 	SaveSession(session *sessions.Session, r *http.Request, w http.ResponseWriter) error
-	RegisterRepo(repo interface{})
-	GetRepo(repoType reflect.Type) (interface{}, error)
+	RegisterRepoWithID(id string, repo interface{})
+	SearchReposByDomain(domain string) []string
+	GetRepoByID(id string) (interface{}, error)
+	GetUserRepository(repoID, repoType, access string) (interface{}, error)
+	GetOrCreateUserRepository(user *models.User, repoType string) (interface{}, error)
+	GetUserRepositories(user *models.User) map[string]interface{}
 }
 
 type ISessionManager interface {

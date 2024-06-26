@@ -12,4 +12,5 @@ type User struct {
 	Roles     string    `db:"roles" json:"roles"` // separated by ";"
 	CreatedAt time.Time `db:"created_at" json:"created_at"`
 	UpdatedAt time.Time `db:"updated_at" json:"updated_at"`
+	RepoID    string    `db:"repo_id" json:"repo_id"`
 }

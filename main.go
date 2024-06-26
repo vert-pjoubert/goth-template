@@ -97,7 +97,7 @@ func main() {
 	viewRenderer := NewViewRenderer(appStore)
 
 	// Register views
-	h := NewHandlers(authenticator, renderer, viewRenderer, sessionManager)
+	h := NewHandlers(authenticator, renderer, viewRenderer, appStore)
 
 	// Set up HTTP routes
 	http.Handle("/static/", http.StripPrefix("/static/", secureFileServer(http.Dir("static"))))

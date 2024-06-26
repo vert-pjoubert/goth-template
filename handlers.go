@@ -16,16 +16,16 @@ type Handlers struct {
 	Auth         IAuthenticator
 	Renderer     *TemplRenderer
 	ViewRenderer *ViewRenderer
-	Session      ISessionManager
+	AppStore     IAppStore
 	baseURL      string
 }
 
-func NewHandlers(auth IAuthenticator, renderer *TemplRenderer, viewRenderer *ViewRenderer, session ISessionManager) *Handlers {
+func NewHandlers(auth IAuthenticator, renderer *TemplRenderer, viewRenderer *ViewRenderer, appstore IAppStore) *Handlers {
 	baseURL := os.Getenv("BASE_URL")
 	if baseURL == "" {
 		baseURL = "http://localhost:8080"
 	}
-	return &Handlers{Auth: auth, Renderer: renderer, ViewRenderer: viewRenderer, Session: session, baseURL: baseURL}
+	return &Handlers{Auth: auth, Renderer: renderer, ViewRenderer: viewRenderer, AppStore: appstore, baseURL: baseURL}
 }
 
 func (h *Handlers) IndexHandler(w http.ResponseWriter, r *http.Request) {
