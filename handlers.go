@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/vert-pjoubert/goth-template/store/models"
+	"github.com/vert-pjoubert/goth-template/repositories/models"
 	"github.com/vert-pjoubert/goth-template/templates"
 )
 
