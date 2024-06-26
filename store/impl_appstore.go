@@ -14,8 +14,8 @@ import (
 	"github.com/vert-pjoubert/goth-template/utils"
 )
 
-// AppStore struct integrates IAppStore interface methods and repository management.
-type AppStore struct {
+// IAppStore struct integrates IAppStore interface methods and repository management.
+type IAppStore struct {
 	mu                           sync.Mutex
 	Database                     *SqlxDbStore
 	SessionManager               auth.ISessionManager
@@ -26,9 +26,9 @@ type AppStore struct {
 	RepoTypeMeta                 map[string]func(*sqlx.DB) interface{}
 }
 
-// NewAppStore initializes a new AppStore.
-func NewAppStore(database *SqlxDbStore, sessionManager auth.ISessionManager) *AppStore {
-	store := &AppStore{
+// NewAppStore initializes a new IAppStore.
+func NewAppStore(database *SqlxDbStore, sessionManager auth.ISessionManager) *IAppStore {
+	store := &IAppStore{
 		Database:                     database,
 		SessionManager:               sessionManager,
 		UserRepository:               repositories.NewSQLUserRepository(database.db),
@@ -42,8 +42,8 @@ func NewAppStore(database *SqlxDbStore, sessionManager auth.ISessionManager) *Ap
 	return store
 }
 
-// Init loads repository metadata into the AppStore.
-func (store *AppStore) Init() error {
+// Init loads repository metadata into the IAppStore.
+func (store *IAppStore) Init() error {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 
@@ -65,18 +65,18 @@ func (store *AppStore) Init() error {
 }
 
 // RegisterRepoTypeMeta registers a new repository type with a creation function.
-func (store *AppStore) RegisterRepoTypeMeta(repoType string, createFunc func(*sqlx.DB) interface{}) {
+func (store *IAppStore) RegisterRepoTypeMeta(repoType string, createFunc func(*sqlx.DB) interface{}) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	store.RepoTypeMeta[repoType] = createFunc
 }
 
 // User and Role Methods
-func (store *AppStore) GetUserByEmail(email string) (*models.User, error) {
+func (store *IAppStore) GetUserByEmail(email string) (*models.User, error) {
 	return store.UserRepository.GetUserByEmail(email)
 }
 
-func (store *AppStore) GetUserRoles(user *models.User) ([]string, error) {
+func (store *IAppStore) GetUserRoles(user *models.User) ([]string, error) {
 	roleNames := utils.ConvertStringToRoles(user.Roles)
 	var expandedRoles []string
 	for _, roleName := range roleNames {
@@ -89,32 +89,32 @@ func (store *AppStore) GetUserRoles(user *models.User) ([]string, error) {
 	return expandedRoles, nil
 }
 
-func (store *AppStore) GetRolePermissions(role *models.Role) ([]string, error) {
+func (store *IAppStore) GetRolePermissions(role *models.Role) ([]string, error) {
 	return utils.ConvertStringToPermissions(role.Permissions), nil
 }
 
-func (store *AppStore) GetRoleByName(name string) (*models.Role, error) {
+func (store *IAppStore) GetRoleByName(name string) (*models.Role, error) {
 	return store.RoleRepository.GetRoleByName(name)
 }
 
 // Session Methods
-func (store *AppStore) GetSession(r *http.Request) (*sessions.Session, error) {
+func (store *IAppStore) GetSession(r *http.Request) (*sessions.Session, error) {
 	return store.SessionManager.GetSession(r)
 }
 
-func (store *AppStore) SaveSession(session *sessions.Session, r *http.Request, w http.ResponseWriter) error {
+func (store *IAppStore) SaveSession(session *sessions.Session, r *http.Request, w http.ResponseWriter) error {
 	return store.SessionManager.SaveSession(r, w, session)
 }
 
 // RegisterRepoWithID registers a new repository with a specific ID.
-func (store *AppStore) RegisterRepoWithID(id string, repo interface{}) {
+func (store *IAppStore) RegisterRepoWithID(id string, repo interface{}) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	store.Repositories[id] = repo
 }
 
 // SearchReposByDomain searches for repositories by domain.
-func (store *AppStore) SearchReposByDomain(domain string) []string {
+func (store *IAppStore) SearchReposByDomain(domain string) []string {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 
@@ -129,7 +129,7 @@ func (store *AppStore) SearchReposByDomain(domain string) []string {
 }
 
 // GetRepoByID retrieves a repository by its ID.
-func (store *AppStore) GetRepoByID(id string) (interface{}, error) {
+func (store *IAppStore) GetRepoByID(id string) (interface{}, error) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 
@@ -140,13 +140,13 @@ func (store *AppStore) GetRepoByID(id string) (interface{}, error) {
 }
 
 // GetUserRepository retrieves the user repository by its ID and type.
-func (store *AppStore) GetUserRepository(repoID, repoType string, access string) (interface{}, error) {
+func (store *IAppStore) GetUserRepository(repoID, repoType string, access string) (interface{}, error) {
 	repoIDWithDomain := fmt.Sprintf("%s.%s.%s", repoID, repoType, access)
 	return store.GetRepoByID(repoIDWithDomain)
 }
 
 // GetOrCreateUserRepository gets or creates a user-specific repository.
-func (store *AppStore) GetOrCreateUserRepository(user *models.User, repoType string) (interface{}, error) {
+func (store *IAppStore) GetOrCreateUserRepository(user *models.User, repoType string) (interface{}, error) {
 	repoID := fmt.Sprintf("%s.%s.Private", user.RepoID, repoType)
 	repo, err := store.GetRepoByID(repoID)
 	if err == nil {
@@ -166,7 +166,7 @@ func (store *AppStore) GetOrCreateUserRepository(user *models.User, repoType str
 }
 
 // GetUserRepositories retrieves all repositories associated with a user's repoID.
-func (store *AppStore) GetUserRepositories(user *models.User) map[string]interface{} {
+func (store *IAppStore) GetUserRepositories(user *models.User) map[string]interface{} {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 

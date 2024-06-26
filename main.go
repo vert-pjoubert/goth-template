@@ -11,6 +11,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	"github.com/vert-pjoubert/goth-template/auth"
+	"github.com/vert-pjoubert/goth-template/repositories"
 	"github.com/vert-pjoubert/goth-template/store"
 )
 
@@ -86,6 +87,10 @@ func main() {
 	// Create cached app store
 	appStore := store.NewAppStore(dbStore, sessionManager)
 
+	//Register the UserRepository type with the AppStore
+	appStore.RegisterRepoTypeMeta("UserRepository", func(db *sqlx.DB) interface{} {
+		return repositories.NewSQLUserRepository(db)
+	})
 	// Initialize OAuth2 authenticator
 	authenticator, err := auth.NewOAuth2Authenticator(config, sessionManager, appStore)
 	if err != nil {
